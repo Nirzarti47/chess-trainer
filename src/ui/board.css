@@ -1,0 +1,86 @@
+/* Доска на всю ширину контейнера, квадратная, без координат.
+   Цвета приходят переменными из блока стилей настроек (boardTheme.ts); здесь — значения «Ночной» на случай,
+   если доска показана вне SettingsProvider. */
+.board {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.board .board-cg {
+  width: 100%;
+  height: 100%;
+}
+
+.board cg-board {
+  background: repeating-conic-gradient(var(--board-dark, #4e657e) 0 25%, var(--board-light, #aebccb) 0 50%) 0 0 / 25% 25%;
+}
+
+.board cg-board square.hi-light {
+  background: var(--board-hi-light, #e7cb7a);
+}
+
+.board cg-board square.hi-dark {
+  background: var(--board-hi-dark, #c19a3b);
+}
+
+.board cg-board square.selected {
+  background: color-mix(in srgb, var(--board-hi-dark, #c19a3b) 70%, transparent);
+}
+
+.board cg-board square.hint {
+  box-shadow: inset 0 0 0 4px var(--accent);
+  background-color: rgba(240, 178, 67, 0.35);
+}
+
+.board cg-board square.move-dest {
+  background: radial-gradient(rgba(12, 24, 33, 0.32) 19%, transparent 21%);
+}
+
+.board cg-board square.move-dest.oc {
+  background: radial-gradient(transparent 78%, rgba(12, 24, 33, 0.32) 80%);
+}
+
+/* Выбор фигуры при превращении пешки */
+.board-promotion {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+}
+
+.board-promotion-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(10, 18, 24, 0.55);
+  cursor: pointer;
+}
+
+.board-promotion-choices {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 5px 0 #0f1920;
+}
+
+.board-promotion-choices button {
+  width: 64px;
+  height: 64px;
+  padding: 4px;
+  border: 0;
+  border-radius: 10px;
+  background: #9fb0bd;
+  cursor: pointer;
+}
+
+.board-promotion-choices img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

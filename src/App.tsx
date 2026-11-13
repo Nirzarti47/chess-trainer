@@ -1,4 +1,6 @@
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { AppearanceScreen } from './screens/AppearanceScreen';
+import { SettingsProvider } from './ui/settings';
 import { TabBar } from './ui/TabBar';
 
 /** Временный экран: только заголовок. Настоящие экраны появятся в следующих задачах. */
@@ -25,7 +27,7 @@ function Layout() {
           <Route path="/learn" element={<Placeholder title="Учёба" />} />
           <Route path="/puzzles" element={<Placeholder title="Задачи" />} />
           <Route path="/profile" element={<Placeholder title="Профиль" />} />
-          <Route path="/profile/appearance" element={<Placeholder title="Оформление" />} />
+          <Route path="/profile/appearance" element={<AppearanceScreen />} />
           <Route path="/profile/backup" element={<Placeholder title="Резервная копия" />} />
           <Route path="/profile/about" element={<Placeholder title="О приложении" />} />
           <Route path="/lesson/:nodeId/:lessonIndex" element={<Placeholder title="Урок" />} />
@@ -40,8 +42,10 @@ function Layout() {
 
 export default function App() {
   return (
-    <HashRouter>
-      <Layout />
-    </HashRouter>
+    <SettingsProvider>
+      <HashRouter>
+        <Layout />
+      </HashRouter>
+    </SettingsProvider>
   );
 }

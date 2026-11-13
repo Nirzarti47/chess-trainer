@@ -1,0 +1,108 @@
+.appearance {
+  padding-bottom: 24px;
+}
+
+.appearance-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px 12px;
+}
+
+.appearance-head h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.appearance-back {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1;
+  text-decoration: none;
+}
+
+/* Предпросмотр остаётся на виду, пока прокручиваются списки */
+.appearance-preview {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 12px;
+  background: var(--bg);
+}
+
+.appearance-preview .board {
+  width: 62%;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.appearance h2 {
+  margin: 8px 16px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.appearance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 10px;
+  padding: 0 16px 12px;
+}
+
+.appearance-opt {
+  text-align: left;
+  padding: 8px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.appearance-opt[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: #22394a;
+}
+
+.appearance-opt b {
+  display: block;
+  margin-top: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.appearance-swatch {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: 44px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.appearance-swatch i {
+  display: block;
+}
+
+.appearance-pieces {
+  display: flex;
+  justify-content: space-around;
+  padding: 3px 2px;
+  border-radius: 6px;
+  background: #9fb0bd;
+}
+
+.appearance-pieces img {
+  width: 28px;
+  height: 28px;
+}
