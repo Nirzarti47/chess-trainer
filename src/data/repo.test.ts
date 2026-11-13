@@ -6,6 +6,7 @@ import {
   getProfile, getRatingHistory, getSeenPuzzleIds, getSettings, getThemeStats, loadActiveLesson,
   markBackupDone, recordTaskResult, saveActiveLesson, saveSettings, snoozeBackup, type ActiveLesson,
 } from './repo';
+import { XP } from '../domain/xp';
 import type { Source, TaskResult } from '../domain/types';
 
 beforeEach(async () => {
@@ -136,6 +137,16 @@ describe('completeLesson', () => {
     expect(await db.days.get('2026-11-14')).toEqual({ day: '2026-11-14', lessons: 1, freePuzzles: 0 });
     expect(await getLessonProgress()).toEqual([{ nodeId: 'n1', lessonIndex: 2, clean: 4, total: 5 }]);
     expect((await getProfile()).xp).toBe(20);
+  });
+
+  it('повторное прохождение не меняет результат первого, но начисляет опыт и день', async () => {
+    const first = new Date(2026, 10, 14, 12, 0);
+    const second = new Date(2026, 10, 15, 12, 0);
+    await completeLesson({ nodeId: 'c1:fork', lessonIndex: 0, clean: 5, total: 12, now: first });
+    await completeLesson({ nodeId: 'c1:fork', lessonIndex: 0, clean: 12, total: 12, now: second });
+    expect(await getLessonProgress()).toEqual([{ nodeId: 'c1:fork', lessonIndex: 0, clean: 5, total: 12 }]);
+    expect((await getProfile()).xp).toBe(XP.lesson * 2);
+    expect((await db.days.get('2026-11-15'))!.lessons).toBe(1);
   });
 
   it('уроки weak нумеруются отдельно и копятся', async () => {

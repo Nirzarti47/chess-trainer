@@ -91,7 +91,10 @@ export async function completeLesson(r: {
 }): Promise<void> {
   const { nodeId, lessonIndex, clean, total, now } = r;
   await db.transaction('rw', [db.kv, db.lessons, db.days], async () => {
-    await db.lessons.put({ nodeId, lessonIndex, clean, total });
+    // Путь судит тему по первому прохождению: результат повтора не перезаписывает сохранённый.
+    if (!(await db.lessons.get([nodeId, lessonIndex]))) {
+      await db.lessons.put({ nodeId, lessonIndex, clean, total });
+    }
     await updateProfile(p => ({ ...p, xp: p.xp + XP.lesson }), now);
     await updateDay(localDay(now), log => ({ ...log, lessons: log.lessons + 1 }));
   });
