@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Три варианта оформления</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Onest:wght@400;500;600;700&family=PT+Sans:wght@400;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  body{margin:0;background:#E7E9EC;color:#1d2126;font:15px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
+  .page{max-width:1080px;margin:0 auto;padding:28px 16px 60px}
+  .page>h1{font-size:24px;line-height:1.2;margin:0 0 6px}
+  .page>p.lead{margin:0 0 28px;color:#555d66;max-width:62ch}
+  .variant{background:#fff;border-radius:14px;padding:22px;margin-bottom:22px;display:grid;grid-template-columns:1fr;gap:18px;border:2px solid transparent;cursor:pointer}
+  .variant .about{max-width:60ch}
+  .variant.picked{border-color:#1d2126}
+  .variant .about h2{margin:0 0 8px;font-size:19px;line-height:1.25}
+  .variant .about p{margin:0 0 10px;color:#4a525a;font-size:14px}
+  .variant .about ul{margin:0 0 16px;padding-left:18px;color:#4a525a;font-size:14px}
+  .pick{font:inherit;font-weight:600;padding:9px 16px;border-radius:8px;border:2px solid #1d2126;background:#fff;color:#1d2126;cursor:pointer}
+  .variant.picked .pick{background:#1d2126;color:#fff}
+  .phones{display:flex;gap:22px;flex-wrap:wrap;justify-content:center}
+  .phone{width:308px;height:640px;border-radius:38px;border:4px solid #20242a;overflow:hidden;position:relative;display:flex;flex-direction:column;flex:none}
+  .phone .scroll{flex:1;overflow:hidden;position:relative}
+  @media (max-width:860px){.variant{grid-template-columns:1fr}}
+
+  /* board, shared */
+  .board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);aspect-ratio:1;width:100%}
+  .sq{display:grid;place-items:center;position:relative;aspect-ratio:1;min-height:0;overflow:hidden}
+  .pc{font-family:"Segoe UI Symbol","Apple Symbols","Noto Sans Symbols 2","DejaVu Sans",sans-serif;font-size:29px;line-height:1}
+  svg.ic{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ============ A: игровой ============ */
+  .va{background:#fff;color:#1E1A3C;font-family:"Onest","Segoe UI",sans-serif}
+  .va .top{display:flex;gap:8px;padding:16px 14px 10px;align-items:center}
+  .va .chip{display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px;padding:6px 11px;border-radius:999px;background:#F2F0FF}
+  .va .chip.fire{background:#FFF1CC;color:#9A5B00}
+  .va .chip.fire svg{stroke:none;fill:#FF8A1F;width:17px;height:17px}
+  .va .chip.right{margin-left:auto}
+  .va .banner{margin:4px 14px 6px;background:#5546FF;color:#fff;border-radius:18px;padding:13px 16px;box-shadow:0 5px 0 #3A2DC4}
+  .va .banner b{display:block;font-family:"Unbounded",sans-serif;font-weight:700;font-size:15px;line-height:1.3}
+  .va .banner span{font-size:13px;opacity:.85}
+  .va .path{padding:18px 0 0;display:flex;flex-direction:column;gap:17px;align-items:center}
+  .va .node{display:flex;align-items:center;gap:12px;width:210px}
+  .va .node:nth-child(2){transform:translateX(34px)}
+  .va .node:nth-child(3){transform:translateX(52px)}
+  .va .node:nth-child(4){transform:translateX(22px)}
+  .va .node:nth-child(5){transform:translateX(-14px)}
+  .va .dot{width:66px;height:60px;border-radius:50%;display:grid;place-items:center;flex:none;font-size:27px;background:#E6E6EE;color:#A9A9BC;box-shadow:0 6px 0 #C9C9D6}
+  .va .dot .pc{font-size:30px}
+  .va .node.done .dot{background:#1FC8A0;color:#fff;box-shadow:0 6px 0 #149A7B}
+  .va .node.now .dot{background:#5546FF;color:#fff;box-shadow:0 6px 0 #3A2DC4,0 0 0 6px #fff,0 6px 0 6px #D9D5FF}
+  .va .node.box .dot{background:#FFC83D;color:#7A4B00;box-shadow:0 6px 0 #D99B10}
+  .va .node b{display:block;font-size:15px;line-height:1.2}
+  .va .node small{font-size:12.5px;color:#7C7A93}
+  .va .node.now small{color:#5546FF;font-weight:600}
+  .va .tabs{display:flex;border-top:2px solid #EEEDF5;padding:8px 6px 14px;background:#fff}
+  .va .tabs div{flex:1;text-align:center;font-size:11.5px;font-weight:600;color:#A3A1B8}
+  .va .tabs div.on{color:#5546FF}
+  .va .tabs svg{display:block;margin:0 auto 2px}
+  /* lesson */
+  .va .ltop{display:flex;align-items:center;gap:12px;padding:18px 14px 10px}
+  .va .x{font-size:20px;color:#A3A1B8;line-height:1}
+  .va .bar{flex:1;height:14px;border-radius:99px;background:#ECEBF5;overflow:hidden}
+  .va .bar i{display:block;height:100%;width:58%;background:#1FC8A0;border-radius:99px}
+  .va .task{padding:6px 16px 12px}
+  .va .task b{display:block;font-family:"Unbounded",sans-serif;font-size:17px;line-height:1.3}
+  .va .task span{font-size:13.5px;color:#7C7A93}
+  .va .bwrap{margin:0 12px;border-radius:14px;overflow:hidden;box-shadow:0 5px 0 #C9C2FF}
+  .va .sq.l{background:#F1EEFF}.va .sq.d{background:#9C8CFF}
+  .va .sq.from{background:#FFE08A}.va .sq.to{background:#FFC83D}
+  .va .sq.hit::after{content:"";position:absolute;inset:3px;border:3px solid #FF6B5E;border-radius:50%}
+  .va .pc.w{color:#fff;-webkit-text-stroke:1.3px #2B2460;paint-order:stroke fill}
+  .va .pc.b{color:#231C4F}
+  .va .sheet{position:absolute;left:0;right:0;bottom:0;background:#D6F7EC;padding:14px 16px 18px;border-radius:20px 20px 0 0}
+  .va .sheet b{font-family:"Unbounded",sans-serif;font-size:15px;color:#0B7A5F;display:block;margin-bottom:2px}
+  .va .sheet p{margin:0 0 12px;font-size:13.5px;color:#215D4F;line-height:1.4}
+  .va .go{display:block;text-align:center;background:#1FC8A0;color:#fff;font-weight:700;font-size:16px;padding:13px;border-radius:14px;box-shadow:0 5px 0 #149A7B}
+
+  /* ============ B: спокойный тёмный ============ */
+  .vb{background:#16222C;color:#E4ECEF;font-family:"Golos Text","Segoe UI",sans-serif}
+  .vb .head{padding:20px 18px 12px}
+  .vb .head b{font-size:21px;font-weight:600;display:block;line-height:1.2}
+  .vb .head span{font-size:13.5px;color:#8FA5B2}
+  .vb .week{display:flex;gap:6px;padding:0 18px 14px}
+  .vb .week div{flex:1;text-align:center;font-size:11.5px;color:#8FA5B2}
+  .vb .week i{display:block;height:5px;border-radius:3px;background:#2B3F4E;margin-bottom:5px}
+  .vb .week .ok i{background:#F0B243}
+  .vb .week .today{color:#E4ECEF;font-weight:600}
+  .vb .week .today i{background:repeating-linear-gradient(90deg,#F0B243 0 5px,transparent 5px 9px)}
+  .vb .next{margin:0 14px 16px;background:#1F303D;border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px}
+  .vb .next .t{flex:1}
+  .vb .next b{display:block;font-size:16px;font-weight:600}
+  .vb .next span{font-size:13px;color:#8FA5B2}
+  .vb .play{background:#F0B243;color:#2A1D00;font-weight:700;font-size:14px;padding:9px 14px;border-radius:8px}
+  .vb h4{margin:0 18px 8px;font-size:13.5px;font-weight:500;color:#8FA5B2}
+  .vb .line{margin:0 18px;position:relative}
+  .vb .line::before{content:"";position:absolute;left:8px;top:14px;bottom:18px;width:2px;background:#2B3F4E}
+  .vb .row{display:flex;align-items:center;gap:14px;padding:9px 0;position:relative}
+  .vb .mark{width:18px;height:18px;border-radius:50%;border:2px solid #3A5466;background:#16222C;flex:none;z-index:1}
+  .vb .row.done .mark{background:#63C29A;border-color:#63C29A}
+  .vb .row.now .mark{border-color:#F0B243;box-shadow:inset 0 0 0 3px #16222C;background:#F0B243}
+  .vb .row b{font-size:15px;font-weight:500;display:block}
+  .vb .row.lock b{color:#6F8794}
+  .vb .row em{margin-left:auto;font-style:normal;font-size:13px;color:#8FA5B2;font-variant-numeric:tabular-nums}
+  .vb .stats{display:flex;gap:10px;margin:12px 14px 0}
+  .vb .stats div{flex:1;background:#1F303D;border-radius:12px;padding:10px 12px}
+  .vb .stats b{display:block;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+  .vb .stats span{font-size:12px;color:#8FA5B2}
+  .vb .tabs{display:flex;background:#111B23;padding:9px 6px 14px}
+  .vb .tabs div{flex:1;text-align:center;font-size:11.5px;color:#6F8794}
+  .vb .tabs div.on{color:#F0B243}
+  .vb .tabs svg{display:block;margin:0 auto 2px}
+  .vb .ltop{display:flex;align-items:center;gap:12px;padding:18px 16px 12px;font-size:13.5px;color:#8FA5B2}
+  .vb .bar{flex:1;height:4px;border-radius:2px;background:#2B3F4E}
+  .vb .bar i{display:block;height:100%;width:58%;background:#F0B243;border-radius:2px}
+  .vb .task{padding:2px 18px 14px}
+  .vb .task b{font-size:19px;font-weight:600;display:block;line-height:1.25}
+  .vb .task span{font-size:13.5px;color:#8FA5B2}
+  .vb .sq.l{background:#CBD8D1}.vb .sq.d{background:#4C7C7E}
+  .vb .sq.from{background:#D9C27A}.vb .sq.to{background:#E3B955}
+  .vb .sq.hit::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 3px #E06C5A}
+  .vb .pc{font-size:31px}
+  .vb .pc.w{color:#FBFBF6;-webkit-text-stroke:1.2px #1b2a33;paint-order:stroke fill}
+  .vb .pc.b{color:#14212A}
+  .vb .res{padding:14px 18px 0}
+  .vb .res .mv{font-size:13.5px;color:#8FA5B2;font-variant-numeric:tabular-nums}
+  .vb .res .mv b{color:#E4ECEF;font-weight:600}
+  .vb .res p{margin:6px 0 0;font-size:14.5px;line-height:1.45}
+  .vb .res p b{color:#63C29A;font-weight:600}
+  .vb .foot{position:absolute;left:14px;right:14px;bottom:16px;display:flex;gap:10px}
+  .vb .foot a{flex:1;text-align:center;padding:12px;border-radius:10px;font-weight:600;font-size:15px;background:#1F303D;color:#E4ECEF}
+  .vb .foot a.main{background:#F0B243;color:#2A1D00;flex:2}
+
+  /* ============ C: учебник ============ */
+  .vc{background:#F1F3EF;color:#1C2B4A;font-family:"PT Serif",Georgia,serif}
+  .vc .run{display:flex;justify-content:space-between;font-family:"PT Sans",sans-serif;font-size:12.5px;padding:18px 20px 8px;border-bottom:1px solid #1C2B4A;margin:0 0 0}
+  .vc .run b{color:#C4262E;font-weight:700}
+  .vc .title{padding:18px 20px 10px}
+  .vc .title small{font-family:"PT Sans",sans-serif;font-size:13px;display:block;margin-bottom:2px}
+  .vc .title b{font-size:26px;line-height:1.1;font-weight:700;display:block}
+  .vc .title i{display:block;font-size:14px;margin-top:6px;line-height:1.4}
+  .vc .toc{padding:4px 20px 0;list-style:none;margin:0}
+  .vc .toc li{display:flex;align-items:baseline;gap:6px;padding:8px 0 8px 12px;font-size:16px;border-left:3px solid transparent;margin-left:-12px}
+  .vc .toc li .n{font-family:"PT Sans",sans-serif;font-size:13px;width:24px;flex:none}
+  .vc .toc li .dots{flex:1;border-bottom:1.5px dotted #8791A5;transform:translateY(-4px)}
+  .vc .toc li .pg{font-family:"PT Sans",sans-serif;font-size:13.5px;font-variant-numeric:tabular-nums}
+  .vc .toc li.done .t{text-decoration:line-through;text-decoration-thickness:1px;text-decoration-color:#8791A5}
+  .vc .toc li.now{border-left-color:#C4262E;font-weight:700}
+  .vc .toc li.now .pg{color:#C4262E;font-weight:700}
+  .vc .toc li.lock{color:#8791A5}
+  .vc .note{margin:14px 20px 0;border:1px solid #1C2B4A;padding:10px 12px;font-size:14px;line-height:1.4;display:flex;gap:10px;align-items:center}
+  .vc .note b{font-family:"PT Sans",sans-serif;font-size:22px;color:#C4262E}
+  .vc .tabs{display:flex;border-top:1px solid #1C2B4A;font-family:"PT Sans",sans-serif;padding:0 0 8px}
+  .vc .tabs div{flex:1;text-align:center;font-size:13.5px;padding:11px 0 8px;border-top:3px solid transparent;margin-top:-1px;color:#5B6880}
+  .vc .tabs div.on{border-top-color:#C4262E;color:#1C2B4A;font-weight:700}
+  .vc .cap{padding:14px 20px 10px}
+  .vc .cap small{font-family:"PT Sans",sans-serif;font-size:13px;display:block}
+  .vc .cap b{font-size:19px;line-height:1.25;display:block;margin-top:2px}
+  .vc .bwrap{margin:0 20px;border:2px solid #1C2B4A;position:relative}
+  .vc .files{display:grid;grid-template-columns:repeat(8,1fr);margin:3px 22px 0;font-family:"PT Sans",sans-serif;font-size:11.5px;text-align:center;color:#5B6880}
+  .vc .sq.l{background:#FBFCFA}
+  .vc .sq.d{background:repeating-linear-gradient(135deg,#F1F3EF 0 2.2px,#7C89A3 2.2px 3.4px)}
+  .vc .sq.from{box-shadow:inset 0 0 0 2px #C4262E}
+  .vc .sq.to{box-shadow:inset 0 0 0 2px #C4262E;background:#F8DDDD}
+  .vc .pc{font-size:28px;color:#1C2B4A}
+  .vc .pc.w{text-shadow:0 0 0 #FBFCFA}
+  .vc .sol{padding:12px 20px 0;font-size:15px;line-height:1.5}
+  .vc .sol b{color:#C4262E}
+  .vc .sol i{display:block;font-size:13.5px;margin-top:4px;color:#44526B}
+  .vc .foot{position:absolute;left:20px;right:20px;bottom:14px;display:flex;gap:10px;font-family:"PT Sans",sans-serif}
+  .vc .foot a{flex:1;text-align:center;padding:11px;font-weight:700;font-size:15px;border:1.5px solid #1C2B4A}
+  .vc .foot a.main{background:#1C2B4A;color:#F1F3EF;flex:2}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-learn" viewBox="0 0 24 24"><path d="M4 5.5c3-1 5.5-.6 8 1 2.500-1.600 5-2 8-1v12c-3-1-5.500-.600-8 1-2.500-1.600-5-2-8-1z"/><path d="M12 6.500v12"/></symbol>
+  <symbol id="i-puzzle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4M9.500 13v1.500M14.500 13v1.500"/><circle cx="12" cy="3.500" r=".8"/></symbol>
+  <symbol id="i-me" viewBox="0 0 24 24"><circle cx="12" cy="8.500" r="3.500"/><path d="M5 20c.8-3.600 3.600-5.500 7-5.500s6.200 1.900 7 5.500"/></symbol>
+  <symbol id="i-fire" viewBox="0 0 24 24"><path d="M12 2c1 4 5 5.500 5 11a5 5 0 0 1-10 0c0-2 .8-3.300 2-4.500.300 1.500 1 2.300 2 2.500-.500-3 .200-6 1-9z"/></symbol>
+</svg>
+
+<div class="page">
+  <h1>Три варианта оформления</h1>
+  <p class="lead">В каждом варианте два одинаковых экрана: путь обучения и задача в уроке. Сравнивай настроение, цвета и доску. Нажми на вариант, чтобы отметить его, и напиши мне в чат, что нравится и что нет.</p>
+
+  <!-- ===================== A ===================== -->
+  <section class="variant" data-choice="A-igrovoy">
+    <div class="about">
+      <h2>A. Игровой</h2>
+      <p>Яркий и лёгкий, ближе всего к Duolingo по ощущению.</p>
+      <ul>
+        <li>Путь идёт змейкой из больших кнопок</li>
+        <li>Объёмные кнопки, которые хочется нажать</li>
+        <li>Сиреневая доска, крупные похвалы</li>
+      </ul>
+      <button class="pick">Выбрать A</button>
+    </div>
+    <div class="phones">
+      <div class="phone va">
+        <div class="scroll">
+          <div class="top">
+            <div class="chip fire"><svg class="ic"><use href="#i-fire"/></svg>12</div>
+            <div class="chip">Опыт 1 240</div>
+            <div class="chip right">870</div>
+          </div>
+          <div class="banner"><b>Раздел 1. Первые удары</b><span>Пройдено 2 темы из 6</span></div>
+          <div class="path">
+            <div class="node done"><div class="dot">✓</div><div><b>Мат в один ход</b><small>5 из 5 уроков</small></div></div>
+            <div class="node now"><div class="dot"><span class="pc">♞&#xFE0E;</span></div><div><b>Вилка</b><small>Урок 4 из 5</small></div></div>
+            <div class="node"><div class="dot"><span class="pc">♝&#xFE0E;</span></div><div><b>Связка</b><small>Закрыто</small></div></div>
+            <div class="node"><div class="dot"><span class="pc">♛&#xFE0E;</span></div><div><b>Двойной удар</b><small>Закрыто</small></div></div>
+            <div class="node box"><div class="dot">↻</div><div><b>Повторить ошибки</b><small>6 задач ждут</small></div></div>
+          </div>
+        </div>
+        <div class="tabs">
+          <div class="on"><svg class="ic"><use href="#i-learn"/></svg>Учёба</div>
+          <div><svg class="ic"><use href="#i-puzzle"/></svg>Задачи</div>
+          <div><svg class="ic"><use href="#i-bot"/></svg>Боты</div>
+          <div><svg class="ic"><use href="#i-me"/></svg>Профиль</div>
+        </div>
+      </div>
+
+      <div class="phone va">
+        <div class="scroll">
+          <div class="ltop"><span class="x">✕</span><div class="bar"><i></i></div></div>
+          <div class="task"><b>Найди вилку конём</b><span>Ход белых</span></div>
+          <div class="bwrap"><div class="board"></div></div>
+          <div class="sheet">
+            <b>Верно!</b>
+            <p>Конь с e7 нападает на короля и ферзя сразу. Королю придётся уйти, а ферзь твой.</p>
+            <span class="go">Дальше</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== B ===================== -->
+  <section class="variant" data-choice="B-spokoynyy">
+    <div class="about">
+      <h2>B. Спокойный тёмный</h2>
+      <p>Сдержанный, не утомляет глаза в долгой поездке и вечером.</p>
+      <ul>
+        <li>Сверху неделя и кнопка «продолжить»</li>
+        <li>Темы списком, без змейки</li>
+        <li>Доска на всю ширину экрана</li>
+      </ul>
+      <button class="pick">Выбрать B</button>
+    </div>
+    <div class="phones">
+      <div class="phone vb">
+        <div class="scroll">
+          <div class="head"><b>12 дней подряд</b><span>Сегодня осталось 2 урока до цели</span></div>
+          <div class="week">
+            <div class="ok"><i></i>пн</div><div class="ok"><i></i>вт</div><div class="ok"><i></i>ср</div>
+            <div class="today"><i></i>чт</div><div><i></i>пт</div><div><i></i>сб</div><div><i></i>вс</div>
+          </div>
+          <div class="next">
+            <div class="t"><b>Вилка</b><span>Урок 4 из 5, 12 минут</span></div>
+            <span class="play">Продолжить</span>
+          </div>
+          <h4>Раздел 1. Первые удары</h4>
+          <div class="line">
+            <div class="row done"><span class="mark"></span><b>Мат в один ход</b><em>5/5</em></div>
+            <div class="row now"><span class="mark"></span><b>Вилка</b><em>3/5</em></div>
+            <div class="row lock"><span class="mark"></span><b>Связка</b><em>0/5</em></div>
+            <div class="row lock"><span class="mark"></span><b>Двойной удар</b><em>0/4</em></div>
+          </div>
+          <div class="stats">
+            <div><b>870</b><span>рейтинг задач</span></div>
+            <div><b>6</b><span>на повторение</span></div>
+          </div>
+        </div>
+        <div class="tabs">
+          <div class="on"><svg class="ic"><use href="#i-learn"/></svg>Учёба</div>
+          <div><svg class="ic"><use href="#i-puzzle"/></svg>Задачи</div>
+          <div><svg class="ic"><use href="#i-bot"/></svg>Боты</div>
+          <div><svg class="ic"><use href="#i-me"/></svg>Профиль</div>
+        </div>
+      </div>
+
+      <div class="phone vb">
+        <div class="scroll">
+          <div class="ltop"><span>✕</span><div class="bar"><i></i></div><span>7 из 12</span></div>
+          <div class="task"><b>Найди вилку конём</b><span>Ход белых</span></div>
+          <div class="board"></div>
+          <div class="res">
+            <div class="mv">Твой ход: <b>Кd5–e7+</b></div>
+            <p><b>Верно.</b> Конь нападает на короля и ферзя сразу. Король уходит, ферзь твой.</p>
+          </div>
+          <div class="foot"><a>Разбор</a><a class="main">Дальше</a></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== C ===================== -->
+  <section class="variant" data-choice="C-uchebnik">
+    <div class="about">
+      <h2>C. Учебник</h2>
+      <p>Как хороший шахматный учебник: строго, много воздуха, внимание на доске.</p>
+      <ul>
+        <li>Путь выглядит как оглавление книги</li>
+        <li>Доска как диаграмма в книге, со штриховкой</li>
+        <li>Два цвета: чернила и красный</li>
+      </ul>
+      <button class="pick">Выбрать C</button>
+    </div>
+    <div class="phones">
+      <div class="phone vc">
+        <div class="scroll">
+          <div class="run"><span>Шахматный учебник</span><span><b>12-й</b> день подряд</span></div>
+          <div class="title"><small>Глава первая</small><b>Первые удары</b><i>Простые приёмы, которыми выигрывают фигуры в каждой второй партии.</i></div>
+          <ol class="toc">
+            <li class="done"><span class="n">§1</span><span class="t">Мат в один ход</span><span class="dots"></span><span class="pg">5/5</span></li>
+            <li class="now"><span class="n">§2</span><span class="t">Вилка</span><span class="dots"></span><span class="pg">3/5</span></li>
+            <li class="lock"><span class="n">§3</span><span class="t">Связка</span><span class="dots"></span><span class="pg">0/5</span></li>
+            <li class="lock"><span class="n">§4</span><span class="t">Двойной удар</span><span class="dots"></span><span class="pg">0/4</span></li>
+            <li class="lock"><span class="n">§5</span><span class="t">Открытое нападение</span><span class="dots"></span><span class="pg">0/4</span></li>
+          </ol>
+          <div class="note"><b>6</b><span>задач на повторение. Это твои ошибки с прошлой недели.</span></div>
+        </div>
+        <div class="tabs"><div class="on">Учёба</div><div>Задачи</div><div>Боты</div><div>Профиль</div></div>
+      </div>
+
+      <div class="phone vc">
+        <div class="scroll">
+          <div class="run"><span>§2. Вилка</span><span>задача <b>7</b> из 12</span></div>
+          <div class="cap"><small>Ход белых</small><b>Найди вилку конём</b></div>
+          <div class="bwrap"><div class="board" data-outline="1"></div></div>
+          <div class="files"><span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span></div>
+          <div class="sol"><b>1. Кe7+!</b> Конь нападает на короля и ферзя сразу.<i>Король уходит, и следующим ходом конь берёт ферзя.</i></div>
+          <div class="foot"><a>Разбор</a><a class="main">Дальше</a></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  // Позиция после верного хода 1. Кd5-e7+ (вилка на короля g8 и ферзя c6)
+  const POS={f8:'r',g8:'k',a7:'p',f7:'p',g7:'p',h7:'p',c6:'q',e7:'N',f2:'P',g2:'P',h2:'P',d1:'R',g1:'K'};
+  const FILLED={k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}, OUTLINE={k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'};
+  document.querySelectorAll('.board').forEach(function(b){
+    var outline=b.dataset.outline, h='';
+    for(var r=8;r>=1;r--)for(var f=0;f<8;f++){
+      var sq='abcdefgh'[f]+r, cls='sq '+((f+r)%2===1?'d':'l');
+      if(sq==='d5')cls+=' from'; if(sq==='e7')cls+=' to'; if(sq==='g8'||sq==='c6')cls+=' hit';
+      var p=POS[sq], g='';
+      if(p){var w=p===p.toUpperCase(), t=p.toLowerCase();
+        g='<span class="pc '+(w?'w':'b')+'">'+((outline&&w)?OUTLINE:FILLED)[t]+'︎</span>';}
+      h+='<div class="'+cls+'">'+g+'</div>';
+    }
+    b.innerHTML=h;
+  });
+  document.querySelectorAll('.variant').forEach(function(v){
+    v.addEventListener('click',function(){
+      document.querySelectorAll('.variant').forEach(function(o){o.classList.remove('picked')});
+      v.classList.add('picked');
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Доска и фигуры</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  body{margin:0;background:#E7E9EC;color:#1d2126;font:15px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
+  .page{max-width:1000px;margin:0 auto;padding:24px 16px 60px}
+  .page>h1{font-size:24px;line-height:1.2;margin:0 0 6px}
+  .page>p.lead{margin:0 0 20px;color:#555d66;max-width:64ch}
+  .panel{background:#fff;border-radius:14px;padding:20px;margin-bottom:20px}
+  .panel h2{margin:0 0 4px;font-size:18px}
+  .panel>p{margin:0 0 14px;color:#4a525a;font-size:14px;max-width:60ch}
+  .work{display:grid;grid-template-columns:308px 1fr;gap:26px;align-items:start}
+  @media (max-width:720px){.work{grid-template-columns:1fr;justify-items:center}}
+  .ctl h3{margin:0 0 8px;font-size:14px;font-weight:600;color:#4a525a}
+  .ctl h3+.grid{margin-bottom:20px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:10px}
+  .opt{font:inherit;text-align:left;background:#F3F4F6;border:2px solid transparent;border-radius:10px;padding:8px;cursor:pointer;color:#1d2126}
+  .opt.on{border-color:#1d2126;background:#fff}
+  .opt b{display:block;font-size:13.5px;font-weight:600;margin-top:6px}
+  .sw{display:grid;grid-template-columns:repeat(4,1fr);border-radius:6px;overflow:hidden;height:44px}
+  .sw i{display:block}
+  .pcs{display:flex;background:#9FB0BD;border-radius:6px;padding:3px 2px;justify-content:space-around}
+  .pcs img{width:28px;height:28px}
+  .readout{margin-top:18px;padding:12px 14px;background:#16222C;color:#E4ECEF;border-radius:10px;font-size:14px}
+  .readout b{color:#F0B243}
+
+  /* phone, dark theme */
+  .phone{width:308px;height:640px;border-radius:38px;border:4px solid #0c1318;overflow:hidden;position:relative;display:flex;flex-direction:column;flex:none;
+    background:#16222C;color:#E4ECEF;font-family:"Golos Text","Segoe UI",sans-serif}
+  .phone .scroll{flex:1;overflow:hidden;position:relative}
+  svg.ic{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .tabs{display:flex;background:#111B23;padding:9px 6px 14px}
+  .tabs div{flex:1;text-align:center;font-size:11.5px;color:#6F8794}
+  .tabs div.on{color:#F0B243}
+  .tabs svg{display:block;margin:0 auto 2px}
+
+  /* lesson */
+  .ltop{display:flex;align-items:center;gap:12px;padding:18px 16px 12px;font-size:13.5px;color:#8FA5B2}
+  .bar{flex:1;height:10px;border-radius:99px;background:#2B3F4E;overflow:hidden}
+  .bar i{display:block;height:100%;width:58%;background:#F0B243;border-radius:99px}
+  .task{padding:2px 18px 14px}
+  .task b{font-size:19px;font-weight:600;display:block;line-height:1.25}
+  .task span{font-size:13.5px;color:#8FA5B2}
+  .board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);aspect-ratio:1;width:100%;
+    --l:#EBECD0;--d:#739552;--hl:#F5F682;--hd:#B9CA43}
+  .sq{position:relative;aspect-ratio:1;min-height:0}
+  .sq.l{background:var(--l)}.sq.d{background:var(--d)}
+  .sq.l.hi{background:var(--hl)}.sq.d.hi{background:var(--hd)}
+  .sq img{position:absolute;inset:2%;width:96%;height:96%}
+  .hint{padding:14px 18px 0;font-size:14.5px;line-height:1.45;color:#B9C7D0}
+  .foot{position:absolute;left:14px;right:14px;bottom:18px;display:flex;gap:10px}
+  .foot a{flex:1;text-align:center;padding:12px;border-radius:12px;font-weight:600;font-size:15px;background:#22394A;color:#E4ECEF;box-shadow:0 4px 0 #0F1920}
+  .foot a.main{background:#F0B243;color:#2A1D00;flex:2;box-shadow:0 4px 0 #B97F1B}
+
+  /* path, dark snake */
+  .top{display:flex;gap:8px;padding:16px 14px 10px;align-items:center}
+  .chip{display:flex;align-items:center;gap:6px;font-weight:600;font-size:14px;padding:6px 11px;border-radius:999px;background:#1F303D}
+  .chip.fire{color:#F0B243}
+  .chip.fire svg{stroke:none;fill:#F0B243;width:17px;height:17px}
+  .chip.right{margin-left:auto}
+  .banner{margin:4px 14px 6px;background:#22394A;border-radius:18px;padding:13px 16px;box-shadow:0 5px 0 #0F1920}
+  .banner b{display:block;font-weight:700;font-size:16px;line-height:1.3}
+  .banner span{font-size:13px;color:#8FA5B2}
+  .path{padding:18px 0 0;display:flex;flex-direction:column;gap:17px;align-items:center}
+  .node{display:flex;align-items:center;gap:12px;width:210px}
+  .node:nth-child(2){transform:translateX(34px)}
+  .node:nth-child(3){transform:translateX(52px)}
+  .node:nth-child(4){transform:translateX(22px)}
+  .node:nth-child(5){transform:translateX(-14px)}
+  .dot{width:66px;height:60px;border-radius:50%;display:grid;place-items:center;flex:none;font-size:27px;background:#2B3F4E;color:#5F7888;box-shadow:0 6px 0 #1B2A35}
+  .dot img{width:40px;height:40px;filter:grayscale(1) brightness(.75);opacity:.55}
+  .node.done .dot{background:#63C29A;color:#0E2A1F;box-shadow:0 6px 0 #3E8F6C}
+  .node.now .dot{background:#F0B243;box-shadow:0 6px 0 #B97F1B,0 0 0 6px #16222C,0 6px 0 6px #5A4A22}
+  .node.now .dot img{filter:none;opacity:1}
+  .node.box .dot{background:#5AA9D6;color:#0D2738;box-shadow:0 6px 0 #3A7BA3}
+  .node b{display:block;font-size:15px;line-height:1.2;font-weight:600}
+  .node small{font-size:12.5px;color:#8FA5B2}
+  .node.now small{color:#F0B243;font-weight:600}
+  .node.lock b{color:#6F8794}
+  .two{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+  .two .txt{flex:1;min-width:220px;color:#4a525a;font-size:14px}
+  .two .txt ul{padding-left:18px;margin:8px 0 0}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-learn" viewBox="0 0 24 24"><path d="M4 5.5c3-1 5.500-.600 8 1 2.500-1.600 5-2 8-1v12c-3-1-5.500-.600-8 1-2.500-1.600-5-2-8-1z"/><path d="M12 6.500v12"/></symbol>
+  <symbol id="i-puzzle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4M9.500 13v1.500M14.500 13v1.500"/><circle cx="12" cy="3.500" r=".8"/></symbol>
+  <symbol id="i-me" viewBox="0 0 24 24"><circle cx="12" cy="8.500" r="3.500"/><path d="M5 20c.8-3.600 3.600-5.500 7-5.500s6.200 1.900 7 5.500"/></symbol>
+  <symbol id="i-fire" viewBox="0 0 24 24"><path d="M12 2c1 4 5 5.500 5 11a5 5 0 0 1-10 0c0-2 .8-3.300 2-4.500.300 1.500 1 2.300 2 2.500-.500-3 .200-6 1-9z"/></symbol>
+</svg>
+
+<div class="page">
+  <h1>Доска и фигуры</h1>
+  <p class="lead">Нажимай на варианты справа, доска в телефоне меняется сразу. Цвет доски и набор фигур выбираются отдельно, можно перебрать любые сочетания. Потом напиши мне, что выбрал.</p>
+
+  <div class="panel">
+    <div class="work">
+      <div class="phone">
+        <div class="scroll">
+          <div class="ltop"><span>✕</span><div class="bar"><i></i></div><span>7 из 12</span></div>
+          <div class="task"><b>Куда развить коня?</b><span>Ход белых</span></div>
+          <div class="board" id="board"></div>
+          <div class="hint">Чёрные только что вывели слона на c5. Жёлтым подсвечен последний ход.</div>
+          <div class="foot"><a>Подсказка</a><a class="main">Проверить</a></div>
+        </div>
+      </div>
+
+      <div class="ctl">
+        <h3>Цвет доски</h3>
+        <div class="grid" id="boards"></div>
+        <h3>Фигуры</h3>
+        <div class="grid" id="sets"></div>
+        <div class="readout">Сейчас выбрано: доска <b id="rb"></b>, фигуры <b id="rs"></b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Путь змейкой в тёмных тонах</h2>
+    <p>Это то, что я запомнил из твоего ответа: большие объёмные кнопки из игрового варианта на спокойном тёмном фоне. На кнопках стоят фигуры из выбранного выше набора.</p>
+    <div class="two">
+      <div class="phone">
+        <div class="scroll">
+          <div class="top">
+            <div class="chip fire"><svg class="ic"><use href="#i-fire"/></svg>12</div>
+            <div class="chip">Опыт 1 240</div>
+            <div class="chip right">870</div>
+          </div>
+          <div class="banner"><b>Раздел 1. Первые удары</b><span>Пройдено 2 темы из 6</span></div>
+          <div class="path">
+            <div class="node done"><div class="dot">✓</div><div><b>Мат в один ход</b><small>5 из 5 уроков</small></div></div>
+            <div class="node now"><div class="dot"><img data-p="wN" alt=""></div><div><b>Вилка</b><small>Урок 4 из 5</small></div></div>
+            <div class="node lock"><div class="dot"><img data-p="wB" alt=""></div><div><b>Связка</b><small>Закрыто</small></div></div>
+            <div class="node lock"><div class="dot"><img data-p="wQ" alt=""></div><div><b>Двойной удар</b><small>Закрыто</small></div></div>
+            <div class="node box"><div class="dot">↻</div><div><b>Повторить ошибки</b><small>6 задач ждут</small></div></div>
+          </div>
+        </div>
+        <div class="tabs">
+          <div class="on"><svg class="ic"><use href="#i-learn"/></svg>Учёба</div>
+          <div><svg class="ic"><use href="#i-puzzle"/></svg>Задачи</div>
+          <div><svg class="ic"><use href="#i-bot"/></svg>Боты</div>
+          <div><svg class="ic"><use href="#i-me"/></svg>Профиль</div>
+        </div>
+      </div>
+      <div class="txt">
+        Цвета кнопок:
+        <ul>
+          <li>зелёная: тема пройдена</li>
+          <li>жёлтая с ободком: текущая тема</li>
+          <li>серая: ещё закрыта</li>
+          <li>голубая: повторение ошибок</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var BASE='https://cdn.jsdelivr.net/gh/lichess-org/lila@master/public/piece/';
+  var BOARDS=[
+    {id:'green', name:'Зелёная',      l:'#EBECD0',d:'#739552',hl:'#F5F682',hd:'#B9CA43'},
+    {id:'wood',  name:'Дерево',       l:'#F0D9B5',d:'#B58863',hl:'#E6D774',hd:'#C9A63C'},
+    {id:'blue',  name:'Серо-голубая', l:'#DEE3E6',d:'#8CA2AD',hl:'#E9DC8B',hd:'#C2B25C'},
+    {id:'night', name:'Ночная',       l:'#AEBCCB',d:'#4E657E',hl:'#E7CB7A',hd:'#C19A3B'},
+    {id:'lilac', name:'Сиреневая',    l:'#E4DFF5',d:'#8577C2',hl:'#FFE08A',hd:'#E0A93A'},
+    {id:'teal',  name:'Бирюзовая (была)', l:'#CBD8D1',d:'#4C7C7E',hl:'#E3D58B',hd:'#C7A546'}
+  ];
+  var SETS=[
+    {id:'cburnett',  name:'Классические'},
+    {id:'merida',    name:'Турнирные'},
+    {id:'cardinal',  name:'Плотные'},
+    {id:'staunty',   name:'Мягкие'},
+    {id:'california',name:'Плоские'},
+    {id:'maestro',   name:'Изящные'}
+  ];
+  var FEN='r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R', HI={f8:1,c5:1};
+  var cur={board:BOARDS[0],set:SETS[0]};
+  function code(ch){return (ch===ch.toUpperCase()?'w':'b')+ch.toUpperCase()}
+  function src(c){return BASE+cur.set.id+'/'+c+'.svg'}
+
+  function drawBoard(){
+    var b=document.getElementById('board'), rows=FEN.split('/'), h='';
+    b.style.setProperty('--l',cur.board.l);b.style.setProperty('--d',cur.board.d);
+    b.style.setProperty('--hl',cur.board.hl);b.style.setProperty('--hd',cur.board.hd);
+    for(var r=0;r<8;r++){var f=0;
+      rows[r].split('').forEach(function(ch){
+        var n=parseInt(ch,10), k=isNaN(n)?1:n;
+        for(var i=0;i<k;i++){
+          var sq='abcdefgh'[f]+(8-r), cls='sq '+((f+r)%2===1?'d':'l')+(HI[sq]?' hi':'');
+          h+='<div class="'+cls+'">'+(isNaN(n)?'<img alt="" src="'+src(code(ch))+'">':'')+'</div>'; f++;
+        }
+      });
+    }
+    b.innerHTML=h;
+    document.querySelectorAll('img[data-p]').forEach(function(im){im.src=src(im.dataset.p)});
+    document.getElementById('rb').textContent='«'+cur.board.name+'»';
+    document.getElementById('rs').textContent='«'+cur.set.name+'»';
+  }
+  function build(){
+    var bw=document.getElementById('boards'), sw=document.getElementById('sets');
+    BOARDS.forEach(function(o){
+      var el=document.createElement('button');el.className='opt';el.dataset.choice='board-'+o.id;
+      el.innerHTML='<span class="sw"><i style="background:'+o.l+'"></i><i style="background:'+o.d+'"></i><i style="background:'+o.hl+'"></i><i style="background:'+o.d+'"></i></span><b>'+o.name+'</b>';
+      el.onclick=function(){cur.board=o;mark();drawBoard()}; o.el=el; bw.appendChild(el);
+    });
+    SETS.forEach(function(o){
+      var el=document.createElement('button');el.className='opt';el.dataset.choice='set-'+o.id;
+      el.innerHTML='<span class="pcs">'+['wK','wN','bQ','bP'].map(function(c){return '<img alt="" src="'+BASE+o.id+'/'+c+'.svg">'}).join('')+'</span><b>'+o.name+'</b>';
+      el.onclick=function(){cur.set=o;mark();drawBoard()}; o.el=el; sw.appendChild(el);
+    });
+  }
+  function mark(){
+    BOARDS.forEach(function(o){o.el.classList.toggle('on',o===cur.board)});
+    SETS.forEach(function(o){o.el.classList.toggle('on',o===cur.set)});
+  }
+  build();mark();drawBoard();
+</script>
+</body>
+</html>
