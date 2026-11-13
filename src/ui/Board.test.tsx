@@ -8,12 +8,16 @@ import { SettingsProvider, useSettings } from './settings';
 // Обёртка над настоящим chessground включает trustAllEvents и выключает анимацию
 // (в jsdom часы requestAnimationFrame расходятся с performance.now, и анимация «улетает»).
 // Остальное поведение не меняется.
+const cg = vi.hoisted(() => ({ animation: false, apis: [] as Array<{ getFen(): string; state: { animation: { current?: unknown } } }> }));
 vi.mock('chessground', async (importOriginal) => {
   const real = await importOriginal<typeof import('chessground')>();
   return {
     ...real,
-    Chessground: (el: HTMLElement, config: Parameters<typeof real.Chessground>[1]) =>
-      real.Chessground(el, { ...config, trustAllEvents: true, animation: { enabled: false } }),
+    Chessground: (el: HTMLElement, config: Parameters<typeof real.Chessground>[1]) => {
+      const api = real.Chessground(el, { ...config, trustAllEvents: true, animation: { enabled: cg.animation } });
+      cg.apis.push(api);
+      return api;
+    },
   };
 });
 
@@ -36,6 +40,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cg.animation = false;
+  cg.apis.length = 0;
   vi.restoreAllMocks();
 });
 
@@ -139,6 +145,30 @@ describe('Board: ходы', () => {
     expect(onMove).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Ферзь' })).toBeNull();
     await waitFor(() => expect(pieceSquares('white pawn')).toEqual(['a7']));
+  });
+});
+
+describe('Board: первая отрисовка', () => {
+  const MID = 'r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 4 4';
+  const position = (fen: string) => fen.split(' ')[0];
+
+  it('при монтировании позиция сразу заданная, без анимации из начальной расстановки', () => {
+    cg.animation = true; // здесь анимацию не отключаем
+    render(<Board fen={MID} orientation="black" dests={new Map()} lastMove={null} interactive={false} onMove={() => {}} />);
+    const api = cg.apis[0];
+    expect(position(api.getFen())).toBe(position(MID));
+    expect(api.state.animation.current).toBeUndefined();
+  });
+
+  it('последующая смена fen по-прежнему анимируется', () => {
+    cg.animation = true;
+    const { rerender } = render(
+      <Board fen={START} orientation="white" dests={new Map()} lastMove={null} interactive={false} onMove={() => {}} />,
+    );
+    expect(cg.apis[0].state.animation.current).toBeUndefined();
+    rerender(<Board fen={MID} orientation="white" dests={new Map()} lastMove={null} interactive={false} onMove={() => {}} />);
+    expect(position(cg.apis[0].getFen())).toBe(position(MID));
+    expect(cg.apis[0].state.animation.current).toBeDefined();
   });
 });
 

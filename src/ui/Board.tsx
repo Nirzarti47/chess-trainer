@@ -65,8 +65,12 @@ export function Board({ fen, orientation, dests, lastMove, highlight = [], arrow
   // Увеличивается после каждого хода пользователя, чтобы заново выставить позицию из fen.
   const [moveCount, setMoveCount] = useState(0);
 
+  // Актуальные свойства для первой конфигурации chessground (читаются при создании доски).
+  const propsRef = useRef({ fen, orientation, dests, lastMove, highlight, interactive });
+
   useLayoutEffect(() => {
     onMoveRef.current = onMove;
+    propsRef.current = { fen, orientation, dests, lastMove, highlight, interactive };
   });
 
   const finishMove = useCallback((uci: string) => {
@@ -75,10 +79,18 @@ export function Board({ fen, orientation, dests, lastMove, highlight = [], arrow
   }, []);
 
   useEffect(() => {
+    // Начальную позицию отдаём конструктору: иначе первый set() анимировал бы фигуры из стартовой расстановки.
+    const init = propsRef.current;
+    const turn = turnOf(init.fen);
     const api = Chessground(elRef.current!, {
+      fen: init.fen,
+      orientation: init.orientation,
+      turnColor: turn,
       coordinates: false,
-      highlight: { lastMove: false, check: false },
+      highlight: { lastMove: false, check: false, custom: squareClasses(init.lastMove, init.highlight) },
       movable: {
+        color: init.interactive ? turn : undefined,
+        dests: init.interactive ? (init.dests as Map<Key, Key[]>) : new Map(),
         free: false,
         showDests: true,
         events: {
