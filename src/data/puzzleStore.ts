@@ -1,0 +1,69 @@
+import type { Puzzle, ThemeId } from '../domain/types';
+
+export type Circle123 = 1 | 2 | 3;
+
+export interface PuzzleQuery {
+  theme: ThemeId; min: number; max: number; exclude: ReadonlySet<string>; limit: number; near?: number;
+}
+
+export interface PuzzlePool {
+  query(q: PuzzleQuery): Puzzle[];
+  byId(id: string): Puzzle | undefined;
+  count(theme: ThemeId): number;
+}
+
+/** Строка файла: [id, fen, "ход ход …", рейтинг, "тема тема"]. */
+export type PuzzleRow = [string, string, string, number, string];
+
+export function createPool(rows: PuzzleRow[]): PuzzlePool {
+  const all: Puzzle[] = rows.map(([id, fen, moves, rating, themes]) => ({
+    id, fen, moves: moves.split(' '), rating, themes: themes.split(' '),
+  }));
+  const ids = new Map<string, Puzzle>(all.map((p) => [p.id, p]));
+  const byTheme = new Map<ThemeId, Puzzle[]>();
+  for (const p of all) {
+    for (const t of p.themes) {
+      const list = byTheme.get(t);
+      if (list) list.push(p); else byTheme.set(t, [p]);
+    }
+  }
+  return {
+    query({ theme, min, max, exclude, limit, near }) {
+      const found = (byTheme.get(theme) ?? []).filter(
+        (p) => p.rating >= min && p.rating <= max && !exclude.has(p.id));
+      if (near !== undefined) {
+        // sort стабилен: при равной близости остаётся порядок файла (по рейтингу, затем по id)
+        found.sort((a, b) => Math.abs(a.rating - near) - Math.abs(b.rating - near));
+      }
+      return found.slice(0, Math.max(limit, 0));
+    },
+    byId: (id) => ids.get(id),
+    count: (theme) => byTheme.get(theme)?.length ?? 0,
+  };
+}
+
+const cache = new Map<Circle123, Promise<PuzzlePool>>();
+
+/** Загружает круг один раз; параллельные вызовы делят один запрос. */
+export function loadCircle(c: Circle123): Promise<PuzzlePool> {
+  let pending = cache.get(c);
+  if (!pending) {
+    pending = fetch(`./puzzles/c${c}.json`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`Не удалось загрузить задачи круга ${c}`);
+        return r.json() as Promise<PuzzleRow[]>;
+      })
+      .then(createPool);
+    pending.catch(() => cache.delete(c));
+    cache.set(c, pending);
+  }
+  return pending;
+}
+
+export async function findPuzzle(id: string): Promise<Puzzle | undefined> {
+  for (const c of [1, 2, 3] as const) {
+    const found = (await loadCircle(c)).byId(id);
+    if (found) return found;
+  }
+  return undefined;
+}
