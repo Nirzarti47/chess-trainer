@@ -53,17 +53,6 @@ button {
   overflow-y: auto;
 }
 
-.screen-placeholder {
-  padding: 18px 16px;
-}
-
-.screen-placeholder h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.25;
-}
-
 /* Нижние вкладки */
 .tabbar {
   display: flex;

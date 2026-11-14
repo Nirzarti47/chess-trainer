@@ -1,0 +1,278 @@
+/* Профиль и его подэкраны: «Резервная копия», «О приложении» */
+.profile {
+  padding-bottom: 28px;
+}
+
+.profile-head {
+  padding: 18px 16px 12px;
+}
+
+.profile h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.profile h2 {
+  margin: 18px 16px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.profile-pad {
+  padding: 0 16px;
+}
+
+.profile-text {
+  margin: 0 0 14px;
+}
+
+.profile-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.profile-card {
+  margin: 0 14px 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+/* Напоминание о резервной копии */
+.profile-reminder {
+  background: #22394a;
+  box-shadow: 0 5px 0 #0f1920;
+  margin-bottom: 16px;
+}
+
+.profile-reminder p {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.profile-reminder b {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 16px;
+  color: var(--text);
+}
+
+/* Серия и неделя, как в макете mockups/variants.html, вариант B */
+.profile-streak {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.profile-streak b {
+  font-size: 22px;
+  color: var(--accent);
+}
+
+.profile-week {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.profile-week li {
+  flex: 1;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.profile-week li::before {
+  content: '';
+  display: block;
+  height: 5px;
+  margin-bottom: 5px;
+  border-radius: 3px;
+  background: #2b3f4e;
+}
+
+.profile-week [data-state='done']::before {
+  background: var(--accent);
+}
+
+/* Прощённый пропуск — приглушённый акцент: день не потерян */
+.profile-week [data-state='forgiven']::before {
+  background: repeating-linear-gradient(90deg, #8a6a2e 0 3px, transparent 3px 6px);
+}
+
+/* Пропуск без штрафа: просто пустая риска с тонкой обводкой */
+.profile-week [data-state='missed']::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px #5f7888;
+}
+
+.profile-week [data-state='today'] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.profile-week [data-state='today']::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.profile-week [data-state='future'],
+.profile-week [data-state='before'] {
+  opacity: 0.55;
+}
+
+/* Числа */
+.profile-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.profile-stats--three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.profile-stat b {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.profile-stat span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.profile-chart {
+  display: block;
+  width: 100%;
+  height: 64px;
+  margin-top: 12px;
+}
+
+.profile-chart polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Сильные и слабые темы, авторы и лицензии */
+.profile-themes,
+.profile-credits {
+  margin: 0 14px;
+  padding: 4px 16px;
+  border-radius: 16px;
+  background: var(--surface);
+  list-style: none;
+}
+
+.profile-themes li,
+.profile-credits li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.profile-themes li + li,
+.profile-credits li + li {
+  border-top: 1px solid #2b3f4e;
+}
+
+.profile-themes b {
+  color: var(--accent);
+}
+
+.profile-credits li {
+  flex-direction: column;
+  gap: 0;
+}
+
+.profile-credits b {
+  font-weight: 600;
+}
+
+.profile-credits span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Пункты меню */
+.profile-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 22px 14px 0;
+}
+
+.profile-menu a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 0 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.profile-menu a span {
+  font-size: 22px;
+  color: var(--muted);
+}
+
+/* Подэкраны */
+.sub-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px 12px;
+}
+
+.sub-back {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.profile-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 16px 0;
+}
+
+.profile-status {
+  margin: 16px 16px 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.profile-status--ok {
+  color: var(--success);
+}
+
+.profile-link {
+  color: var(--accent);
+}

@@ -1,19 +1,13 @@
 import { HashRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { AboutScreen } from './screens/AboutScreen';
 import { AppearanceScreen } from './screens/AppearanceScreen';
+import { BackupScreen } from './screens/BackupScreen';
 import { LearnScreen } from './screens/LearnScreen';
 import { LessonScreen, WeakSpotsScreen } from './screens/LessonScreen';
+import { ProfileScreen } from './screens/ProfileScreen';
 import { PuzzleRunScreen, PuzzlesScreen } from './screens/PuzzlesScreen';
 import { SettingsProvider } from './ui/settings';
 import { TabBar } from './ui/TabBar';
-
-/** Временный экран: только заголовок. Настоящие экраны появятся в следующих задачах. */
-function Placeholder({ title }: { title: string }) {
-  return (
-    <section className="screen-placeholder">
-      <h1>{title}</h1>
-    </section>
-  );
-}
 
 /** «Слабые места» — урок; free, theme-<id> и review — поток вкладки «Задачи». */
 function RunRoute() {
@@ -35,10 +29,10 @@ function Layout() {
           <Route path="/" element={<Navigate to="/learn" replace />} />
           <Route path="/learn" element={<LearnScreen />} />
           <Route path="/puzzles" element={<PuzzlesScreen />} />
-          <Route path="/profile" element={<Placeholder title="Профиль" />} />
+          <Route path="/profile" element={<ProfileScreen />} />
           <Route path="/profile/appearance" element={<AppearanceScreen />} />
-          <Route path="/profile/backup" element={<Placeholder title="Резервная копия" />} />
-          <Route path="/profile/about" element={<Placeholder title="О приложении" />} />
+          <Route path="/profile/backup" element={<BackupScreen />} />
+          <Route path="/profile/about" element={<AboutScreen />} />
           <Route path="/lesson/:nodeId/:lessonIndex" element={<LessonScreen />} />
           <Route path="/run/:mode" element={<RunRoute />} />
           <Route path="*" element={<Navigate to="/learn" replace />} />
