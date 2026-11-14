@@ -18,9 +18,7 @@ describe('explanations', () => {
     expect(getExplain('fork', 'reminder')).toHaveLength(1);
   });
 
-  it('для темы без содержания возвращает пустой список', () => {
-    expect(getExplain('smotheredMate', 'full')).toEqual([]);
-    expect(getExplain('smotheredMate', 'reminder')).toEqual([]);
+  it('для неизвестной темы возвращает пустой список', () => {
     expect(getExplain('unknown', 'full')).toEqual([]);
     expect(getExplain('constructor', 'full')).toEqual([]);
     expect(getAuthoredLesson('constructor', 0)).toEqual([]);

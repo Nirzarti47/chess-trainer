@@ -9,7 +9,8 @@ import { THEMES } from './themes';
 // Проверка шахматной правильности всего авторского содержания разом.
 // Оценку ходов движком делает отдельный скрипт scripts/verify_content.mjs.
 
-const CIRCLE1 = THEMES.filter((t) => t.firstCircle === 1).map((t) => t.id);
+/** Все темы учебного плана: у каждой должно быть объяснение. */
+const THEME_IDS = THEMES.map((t) => t.id);
 /** Авторские узлы берутся из учебного плана: новый узел без содержания уронит тест. */
 const AUTHORED_NODES = CURRICULUM.flatMap((s) => s.nodes).filter((n) => n.kind === 'authored');
 const OPENING_LESSONS = [0, 1, 2];
@@ -25,7 +26,7 @@ function allTasks(): { where: string; task: LessonTask }[] {
       getAuthoredLesson(node.id, l).forEach((task, i) => out.push({ where: `${node.id}#${l}[${i}]`, task }));
     }
   }
-  for (const id of CIRCLE1) {
+  for (const id of THEME_IDS) {
     for (const mode of ['full', 'reminder'] as const) {
       getExplain(id, mode).forEach((step, i) => out.push({ where: `${id}.${mode}[${i}]`, task: { kind: 'explain', step } }));
     }
@@ -195,8 +196,8 @@ describe('состав уроков', () => {
     }
   });
 
-  it('у каждой темы круга 1 есть полное объяснение из 2–3 шагов и напоминание из одного шага', () => {
-    for (const id of CIRCLE1) {
+  it('у каждой темы есть полное объяснение из 2–3 шагов и напоминание из одного шага', () => {
+    for (const id of THEME_IDS) {
       const full: ExplainStep[] = getExplain(id, 'full');
       expect(full.length, id).toBeGreaterThanOrEqual(2);
       expect(full.length, id).toBeLessThanOrEqual(3);

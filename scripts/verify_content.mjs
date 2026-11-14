@@ -154,12 +154,17 @@ function collectItems() {
   return items;
 }
 
+// Необязательный фильтр: node scripts/verify_content.mjs fork pin — только места, чьё имя
+// начинается с одного из слов. Без аргументов проверяется всё содержание.
+const only = process.argv.slice(2);
+const items = collectItems().filter((it) => !only.length || only.some((p) => it.where.startsWith(p)));
+
 const engine = new Engine();
 await engine.init();
 
 const rows = [];
 let failed = 0;
-for (const item of collectItems()) {
+for (const item of items) {
   const top = await allNearBest(item.fen);
   const best = top[0];
   const problems = [];
