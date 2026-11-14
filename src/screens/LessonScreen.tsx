@@ -5,6 +5,7 @@ import {
   saveActiveLesson, type ActiveLesson,
 } from '../data/repo';
 import { bestReply as engineBestReply, warmUp as engineWarmUp } from '../engine/engine';
+import { EXAM_ADVICE_BELOW } from '../domain/path';
 import type { LessonTask, Source, TaskResult } from '../domain/types';
 import { XP } from '../domain/xp';
 import { BigButton } from '../ui/BigButton';
@@ -130,7 +131,7 @@ type Phase =
   | { kind: 'loading' }
   | { kind: 'missing' }
   | { kind: 'run'; lesson: Lesson; resume: RunProgress }
-  | { kind: 'summary'; summary: LessonSummaryData };
+  | { kind: 'summary'; summary: LessonSummaryData; advice: boolean };
 
 function canResume(a: SavedLesson | null, nodeId: string, lessonIndex: number): a is SavedLesson & Lesson {
   return !!a && a.nodeId === nodeId && a.lessonIndex === lessonIndex && a.title !== undefined
@@ -157,6 +158,8 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
 
   useEffect(() => {
     let alive = true;
+    // Новый адрес — новый урок: прежний не остаётся на экране, пока грузится следующий.
+    setPhase({ kind: 'loading' });
     (async () => {
       if (!nodeId || !Number.isInteger(lessonIndex)) throw new Error('Неверный адрес урока');
       const saved = (await loadActiveLesson().catch(() => null)) as SavedLesson | null;
@@ -179,7 +182,8 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
   const toLearn = () => navigate('/learn');
 
   function finish(summary: LessonSummaryData) {
-    setPhase({ kind: 'summary', summary });
+    const advice = nodeId.endsWith(':exam') && summary.total > 0 && summary.clean / summary.total < EXAM_ADVICE_BELOW;
+    setPhase({ kind: 'summary', summary, advice });
     completeLesson({ nodeId, lessonIndex, clean: summary.clean, total: summary.total, now: new Date() })
       .then(clearActiveLesson)
       .catch((e: unknown) => console.error('Не удалось записать урок', e));
@@ -198,6 +202,7 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
     case 'run':
       return (
         <LessonRun
+          key={`${nodeId}/${lessonIndex}`}
           tasks={phase.lesson.tasks}
           source={phase.lesson.source}
           title={phase.lesson.title}
@@ -209,7 +214,7 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
         />
       );
     case 'summary':
-      return <LessonSummary {...phase.summary} onDone={toLearn} />;
+      return <LessonSummary {...phase.summary} advice={phase.advice} onDone={toLearn} />;
   }
 }
 

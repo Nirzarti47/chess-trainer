@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { Chess } from 'chess.js';
 import { db } from '../data/db';
 import { loadActiveLesson } from '../data/repo';
@@ -43,15 +43,24 @@ function lesson(tasks: LessonTask[], source: Source = 'lesson') {
   return vi.fn(async (_nodeId: string, _lessonIndex: number) => ({ title: 'Вилка', source, tasks }));
 }
 
+/** Переход на другой адрес без выхода из экрана урока. */
+function GoTo({ to }: { to: string }) {
+  const navigate = useNavigate();
+  return <button type="button" onClick={() => navigate(to)}>Перейти</button>;
+}
+
 function renderLesson(opts: {
   factory: ReturnType<typeof lesson>;
   engine?: (fen: string) => Promise<string | null>;
   warmUp?: () => Promise<boolean>;
+  path?: string;
+  goTo?: string;
 }) {
   const engine = opts.engine ?? vi.fn(async () => null);
   const warmUp = opts.warmUp ?? vi.fn(async () => true);
   return render(
-    <MemoryRouter initialEntries={['/lesson/c1:fork/0']}>
+    <MemoryRouter initialEntries={[opts.path ?? '/lesson/c1:fork/0']}>
+      {opts.goTo && <GoTo to={opts.goTo} />}
       <Routes>
         <Route
           path="/lesson/:nodeId/:lessonIndex"
@@ -326,6 +335,85 @@ describe('LessonScreen', () => {
     expect(await screen.findByText('Решено с первого раза: 1 из 1')).toBeTruthy();
     await waitFor(async () => expect(await db.lessons.count()).toBe(1));
     expect(await db.attempts.count()).toBe(1);
+  });
+
+  it('explain: после неверного хода нужный ход показан стрелкой, «Показать ход» играет его', async () => {
+    const step: LessonTask = { kind: 'explain', step: { fen: START, text: 'Сыграй e4', move: 'e2e4',
+      arrows: [['d2', 'd4']] } };
+    renderLesson({ factory: lesson([step]) });
+    await waitInteractive(START);
+    expect(screen.queryByRole('button', { name: 'Показать ход' })).toBeNull();
+    move('d2d4');
+    expect(await screen.findByRole('button', { name: 'Показать ход' })).toBeTruthy();
+    expect(board.props?.arrows).toEqual([['e2', 'e4']]);
+    expect(board.props?.fen).toBe(START);
+    // Верный ход по-прежнему можно сделать самому.
+    expect(board.props?.interactive).toBe(true);
+
+    await click('Показать ход');
+    expect(board.props?.fen).toBe(fenAfter(START, 'e2e4'));
+    expect(board.props?.interactive).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Показать ход' })).toBeNull();
+    await click('Дальше');
+    expect(await screen.findByText('Урок пройден')).toBeTruthy();
+  });
+
+  it('итог урока без задач не показывает строку «Решено с первого раза»', async () => {
+    renderLesson({ factory: lesson([{ kind: 'explain', step: { fen: START, text: 'Просто прочитай' } }]) });
+    await click('Дальше');
+    expect(await screen.findByText('Урок пройден')).toBeTruthy();
+    expect(screen.queryByText(/Решено с первого раза/)).toBeNull();
+    expect(screen.getByText('Опыт: +20')).toBeTruthy();
+  });
+
+  it('контрольная с долей ниже 0,60: совет заглянуть в «Слабые места»', async () => {
+    renderLesson({ factory: lesson([pz('p1'), pz('p2', P2_MOVES)], 'exam'), path: '/lesson/c1:exam/0' });
+    await solve('e7e5', P1);
+    await waitInteractive(P2);
+    move('a7a6');
+    await solve('d7d5', P2);
+    await solve('d7d5', P2);
+    // 1 из 2 — ровно 0,5.
+    expect(await screen.findByText('Решено с первого раза: 1 из 2')).toBeTruthy();
+    expect(screen.getByText('Стоит заглянуть в „Слабые места“')).toBeTruthy();
+  });
+
+  it('контрольная с долей не ниже 0,60 и обычный урок с ошибками — без совета', async () => {
+    const view = renderLesson({ factory: lesson([pz('p1')], 'exam'), path: '/lesson/c1:exam/0' });
+    await solve('e7e5', P1);
+    expect(await screen.findByText('Решено с первого раза: 1 из 1')).toBeTruthy();
+    expect(screen.queryByText('Стоит заглянуть в „Слабые места“')).toBeNull();
+    await waitFor(async () => expect(await loadActiveLesson()).toBeNull());
+    view.unmount();
+
+    renderLesson({ factory: lesson([pz('p1')]) });
+    await waitInteractive(P1);
+    move('a7a6');
+    await solve('e7e5', P1);
+    await solve('e7e5', P1);
+    expect(await screen.findByText('Решено с первого раза: 0 из 1')).toBeTruthy();
+    expect(screen.queryByText('Стоит заглянуть в „Слабые места“')).toBeNull();
+  });
+
+  it('смена адреса посреди урока: новый урок начинается с первого задания, состояние не переносится', async () => {
+    const factory = vi.fn(async (nodeId: string, _lessonIndex: number) => nodeId === 'c1:fork'
+      ? { title: 'Вилка', source: 'lesson' as Source, tasks: [pz('p1'), pz('p2', P2_MOVES)] }
+      : { title: 'Связка', source: 'lesson' as Source, tasks: [pz('q1', P2_MOVES), pz('q2')] });
+    renderLesson({ factory, goTo: '/lesson/c1:pin/0' });
+    await solve('e7e5', P1);
+    await waitInteractive(P2);
+    expect(screen.getByText('2 из 2')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Перейти' }));
+    await waitFor(() => expect(screen.getByText('Связка')).toBeTruthy());
+    expect(factory).toHaveBeenLastCalledWith('c1:pin', 0);
+    expect(screen.getByText('1 из 2')).toBeTruthy();
+    await waitInteractive(P2);
+    await solve('d7d5', P2);
+    await solve('e7e5', P1);
+    expect(await screen.findByText('Решено с первого раза: 2 из 2')).toBeTruthy();
+    await waitFor(async () => expect(await db.lessons.get(['c1:pin', 0])).toEqual(
+      { nodeId: 'c1:pin', lessonIndex: 0, clean: 2, total: 2 }));
   });
 
   it('неизвестный урок: «Урок не найден» и кнопка назад', async () => {

@@ -154,3 +154,9 @@
   color: var(--accent);
   font-weight: 600;
 }
+
+.lesson-summary-body .lesson-summary-advice {
+  margin-top: 14px;
+  color: var(--weak);
+  font-weight: 600;
+}

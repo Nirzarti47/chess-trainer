@@ -201,8 +201,25 @@ function PuzzleTask({ puzzle, title, onDone, bestReply }: {
 
 function ExplainTask({ step, title, onDone }: { step: ExplainStep; title: string; onDone(r: TaskResult): void }) {
   const [played, setPlayed] = useState<string | null>(null);
+  /** После неверной попытки нужный ход показан стрелкой, и его можно сыграть кнопкой. */
+  const [missed, setMissed] = useState(false);
   const fen = played ? playOn(step.fen, played).fen : step.fen;
   const interactive = step.move !== undefined && played === null;
+  const expected = interactive && missed ? [squares(step.move!)] : null;
+
+  function onMove(uci: string) {
+    if (!interactive) return;
+    // Другой ход не меняет fen, и доска сама возвращает фигуру.
+    if (uci === step.move) setPlayed(uci);
+    else setMissed(true);
+  }
+
+  let actions: ReactNode = <NextButton onClick={() => onDone('clean')} />;
+  if (interactive) {
+    actions = missed
+      ? <BigButton className="task-main" onClick={() => setPlayed(step.move!)}>Показать ход</BigButton>
+      : null;
+  }
 
   return (
     <Frame
@@ -214,14 +231,18 @@ function ExplainTask({ step, title, onDone }: { step: ExplainStep; title: string
           orientation={turnOfFen(step.fen)}
           dests={interactive ? legalDests(fen) : NO_DESTS}
           lastMove={played ? squares(played) : null}
-          arrows={played ? [] : step.arrows ?? []}
+          arrows={played ? [] : expected ?? step.arrows ?? []}
           interactive={interactive}
-          // Другой ход не меняет fen, и доска сама возвращает фигуру.
-          onMove={(uci) => { if (interactive && uci === step.move) setPlayed(uci); }}
+          onMove={onMove}
         />
       }
-      body={<p className="task-text">{step.text}</p>}
-      actions={interactive ? null : <NextButton onClick={() => onDone('clean')} />}
+      body={
+        <>
+          <p className="task-text">{step.text}</p>
+          {expected && <Verdict ok={false}>Не тот ход. Нужный ход показан стрелкой</Verdict>}
+        </>
+      }
+      actions={actions}
     />
   );
 }

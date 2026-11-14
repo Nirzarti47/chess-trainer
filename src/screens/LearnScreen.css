@@ -1,0 +1,233 @@
+/* Экран «Учёба»: путь змейкой по макету mockups/boards.html */
+.learn {
+  min-height: 100%;
+  padding-bottom: 28px;
+}
+
+.learn-message {
+  padding: 18px 16px;
+  color: var(--muted);
+}
+
+/* Верхняя строка: серия, опыт, рейтинг */
+.learn-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 16px 14px 10px;
+  background: var(--bg);
+}
+
+.learn-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: var(--surface);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.learn-chip--fire {
+  color: var(--accent);
+}
+
+.learn-chip--fire svg {
+  width: 17px;
+  height: 17px;
+  fill: var(--accent);
+}
+
+.learn-chip--right {
+  margin-left: auto;
+}
+
+/* Заголовок раздела */
+.learn-section + .learn-section {
+  margin-top: 30px;
+}
+
+.learn-banner {
+  margin: 4px 14px 6px;
+  padding: 13px 16px;
+  border-radius: 18px;
+  background: #22394a;
+  box-shadow: 0 5px 0 #0f1920;
+}
+
+.learn-banner h2 {
+  margin: 0;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.learn-banner span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Узлы пути */
+.learn-path {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  align-items: center;
+  margin: 0;
+  padding: 18px 0 0;
+  list-style: none;
+}
+
+.learn-path li {
+  position: relative;
+  width: 210px;
+}
+
+.learn-node {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 0 0 6px;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.learn-node:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.learn-dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 66px;
+  height: 60px;
+  border-radius: 50%;
+  font-size: 27px;
+  background: #2b3f4e;
+  color: #5f7888;
+  box-shadow: 0 6px 0 #1b2a35;
+  transition: transform 0.06s, box-shadow 0.06s;
+}
+
+.learn-dot img {
+  width: 40px;
+  height: 40px;
+  filter: grayscale(1) brightness(0.75);
+  opacity: 0.55;
+}
+
+.learn-flag {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.learn-node:active .learn-dot {
+  transform: translateY(4px);
+}
+
+.learn-node--done .learn-dot {
+  background: var(--success);
+  color: #0e2a1f;
+  box-shadow: 0 6px 0 #3e8f6c;
+}
+
+.learn-node--done:active .learn-dot {
+  box-shadow: 0 2px 0 #3e8f6c;
+}
+
+.learn-node--current .learn-dot {
+  background: var(--accent);
+  color: #2a1d00;
+  box-shadow: 0 6px 0 #b97f1b, 0 0 0 6px var(--bg), 0 6px 0 6px #5a4a22;
+}
+
+.learn-node--current:active .learn-dot {
+  box-shadow: 0 2px 0 #b97f1b, 0 0 0 6px var(--bg), 0 2px 0 6px #5a4a22;
+}
+
+.learn-node--current .learn-dot img {
+  filter: none;
+  opacity: 1;
+}
+
+.learn-node--weak .learn-dot {
+  background: var(--weak);
+  color: #0d2738;
+  box-shadow: 0 6px 0 #3a7ba3;
+}
+
+.learn-node--weak:active .learn-dot {
+  box-shadow: 0 2px 0 #3a7ba3;
+}
+
+.learn-node--locked:active .learn-dot {
+  box-shadow: 0 2px 0 #1b2a35;
+}
+
+.learn-label b {
+  display: block;
+  font-size: 15px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.learn-label small {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.learn-node--current .learn-label small {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.learn-node--locked .learn-label b {
+  color: var(--tab-idle);
+}
+
+.learn-note {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  animation: learn-note-in 0.15s ease-out;
+}
+
+@keyframes learn-note-in {
+  from { opacity: 0; }
+}
+
+/* Повтор уроков пройденного узла */
+.learn-replay {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learn-dot {
+    transition: none;
+  }
+
+  .learn-note {
+    animation: none;
+  }
+}

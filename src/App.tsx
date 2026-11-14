@@ -1,5 +1,6 @@
 import { HashRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { AppearanceScreen } from './screens/AppearanceScreen';
+import { LearnScreen } from './screens/LearnScreen';
 import { LessonScreen, WeakSpotsScreen } from './screens/LessonScreen';
 import { SettingsProvider } from './ui/settings';
 import { TabBar } from './ui/TabBar';
@@ -31,7 +32,7 @@ function Layout() {
       <main className="app-main">
         <Routes>
           <Route path="/" element={<Navigate to="/learn" replace />} />
-          <Route path="/learn" element={<Placeholder title="Учёба" />} />
+          <Route path="/learn" element={<LearnScreen />} />
           <Route path="/puzzles" element={<Placeholder title="Задачи" />} />
           <Route path="/profile" element={<Placeholder title="Профиль" />} />
           <Route path="/profile/appearance" element={<AppearanceScreen />} />
