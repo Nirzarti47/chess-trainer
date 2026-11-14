@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Chess } from 'chess.js';
 import type { ChoiceQuestion, ExplainStep, LessonTask } from '../domain/types';
 import { CASTLING_QUESTIONS } from './basics';
+import { CURRICULUM } from './curriculum';
 import { getAuthoredLesson, getExplain } from './explanations';
 import { THEMES } from './themes';
 
@@ -9,6 +10,8 @@ import { THEMES } from './themes';
 // Оценку ходов движком делает отдельный скрипт scripts/verify_content.mjs.
 
 const CIRCLE1 = THEMES.filter((t) => t.firstCircle === 1).map((t) => t.id);
+/** Авторские узлы берутся из учебного плана: новый узел без содержания уронит тест. */
+const AUTHORED_NODES = CURRICULUM.flatMap((s) => s.nodes).filter((n) => n.kind === 'authored');
 const OPENING_LESSONS = [0, 1, 2];
 
 const basics = () => getAuthoredLesson('basics:basics', 0);
@@ -17,8 +20,11 @@ const openings = (i: number) => getAuthoredLesson('c1:openings', i);
 /** Всё содержание с подписью, где оно лежит: так сообщение об ошибке укажет место. */
 function allTasks(): { where: string; task: LessonTask }[] {
   const out: { where: string; task: LessonTask }[] = [];
-  basics().forEach((task, i) => out.push({ where: `basics[${i}]`, task }));
-  for (const l of OPENING_LESSONS) openings(l).forEach((task, i) => out.push({ where: `openings${l}[${i}]`, task }));
+  for (const node of AUTHORED_NODES) {
+    for (let l = 0; l < node.lessons; l++) {
+      getAuthoredLesson(node.id, l).forEach((task, i) => out.push({ where: `${node.id}#${l}[${i}]`, task }));
+    }
+  }
   for (const id of CIRCLE1) {
     for (const mode of ['full', 'reminder'] as const) {
       getExplain(id, mode).forEach((step, i) => out.push({ where: `${id}.${mode}[${i}]`, task: { kind: 'explain', step } }));
@@ -144,6 +150,13 @@ describe('авторское содержание', () => {
 });
 
 describe('состав уроков', () => {
+  it('у каждого авторского узла учебного плана есть содержание для каждого урока', () => {
+    expect(AUTHORED_NODES.length).toBeGreaterThan(0);
+    for (const node of AUTHORED_NODES) {
+      for (let l = 0; l < node.lessons; l++) expect(getAuthoredLesson(node.id, l).length, `${node.id}#${l}`).toBeGreaterThan(0);
+    }
+  });
+
   it('«Проверка основ»: 4 вопроса про шах, мат и пат, рокировка, взятие на проходе, размены', () => {
     const tasks = basics();
     const choices = tasks.filter((t) => t.kind === 'choice');

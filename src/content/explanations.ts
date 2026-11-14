@@ -8,7 +8,7 @@ import { OPENING_LESSONS } from './openings';
 
 interface ThemeExplain { full: ExplainStep[]; reminder: ExplainStep }
 
-const THEME_EXPLAINS: Record<ThemeId, ThemeExplain> = {
+const THEME_EXPLAINS: Partial<Record<ThemeId, ThemeExplain>> = {
   mateIn1: {
     full: [
       {
@@ -43,7 +43,7 @@ const THEME_EXPLAINS: Record<ThemeId, ThemeExplain> = {
     ],
     reminder: {
       fen: 'r2q1rk1/ppp2ppp/2nb4/3p4/3P2b1/2NB4/PPP2PPP/R1BQ1RK1 w - - 0 1',
-      text: 'Фигуру без защиты бери, если за неё нечем отыграться. Найди такую фигуру.',
+      text: 'Фигура без защиты — добыча: её берут даром. Найди такую фигуру у чёрных.',
       move: 'd1g4',
     },
   },
@@ -61,7 +61,7 @@ const THEME_EXPLAINS: Record<ThemeId, ThemeExplain> = {
       },
     ],
     reminder: {
-      fen: 'r1b2rk1/pppq1p1p/6p1/3N4/8/8/PPP2PPP/R3QRK1 w - - 0 1',
+      fen: 'r1b2rk1/pppq1p1p/6p1/3N4/8/8/PPP2PPP/RQ3RK1 w - - 0 1',
       text: 'Вилка — одна фигура бьёт сразу две. Найди вилку конём.',
       move: 'd5f6',
     },
@@ -70,7 +70,7 @@ const THEME_EXPLAINS: Record<ThemeId, ThemeExplain> = {
     full: [
       {
         fen: 'r4rk1/ppp3pp/2nbq3/8/8/1PN5/2P1BPPP/R2Q1RK1 w - - 0 1',
-        text: 'Связка — это когда фигура не может уйти с линии, потому что за ней стоит король. Поставь слона на c4: ферзь e6 связан и пропадёт.',
+        text: 'Связка — это когда фигура не может уйти с линии, потому что за ней стоит король или более ценная фигура. Поставь слона на c4: ферзь e6 связан и пропадёт.',
         move: 'e2c4',
       },
       {
@@ -119,7 +119,7 @@ const THEME_EXPLAINS: Record<ThemeId, ThemeExplain> = {
     ],
     reminder: {
       fen: '1rb1kb1r/p2p1ppp/5n2/1p6/q3B3/2P2N2/PP1Q1PPP/R1B1R1K1 w k - 0 1',
-      text: 'Уведи фигуру с линии так, чтобы она сама напала, а за ней открылся шах. Найди этот ход.',
+      text: 'Уведи слона с линии e так, чтобы он напал на ферзя, а ладья открыла шах королю. Найди этот ход.',
       move: 'e4c2',
     },
   },
@@ -127,7 +127,7 @@ const THEME_EXPLAINS: Record<ThemeId, ThemeExplain> = {
     full: [
       {
         fen: '8/4k3/1R6/8/8/8/8/R5K1 w - - 0 1',
-        text: 'Мат в два хода: первым ходом загони короля туда, где его ждёт мат. Дай шах ладьёй на a7: шестой ряд держит другая ладья, и королю остаётся только край доски.',
+        text: 'Мат в два хода начинается с хода, который загоняет короля в ловушку. Дай шах ладьёй на a7, и королю останется только край доски, ведь шестой ряд держит ладья b6.',
         move: 'a1a7',
       },
       {
@@ -174,7 +174,7 @@ export function getAuthoredLesson(nodeId: string, lessonIndex: number): LessonTa
 
 /** Для тем без написанного объяснения (круги 2 и 3 добавит следующая задача) — пустой список. */
 export function getExplain(themeId: ThemeId, mode: 'full' | 'reminder'): ExplainStep[] {
-  if (!Object.hasOwn(THEME_EXPLAINS, themeId)) return [];
-  const e = THEME_EXPLAINS[themeId];
+  const e = Object.hasOwn(THEME_EXPLAINS, themeId) ? THEME_EXPLAINS[themeId] : undefined;
+  if (!e) return [];
   return mode === 'full' ? e.full : [e.reminder];
 }

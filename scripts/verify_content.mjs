@@ -1,10 +1,11 @@
 // Проверяет авторское содержание движком: node scripts/verify_content.mjs
 //
 // Для каждого авторского задания каждый ход из accept должен быть не хуже лучшего хода
-// больше чем на 0,5 пешки (Stockfish, глубина 14). Для каждого шага объяснения с ходом
+// больше чем на 0,5 пешки (Stockfish, глубина 18). Для каждого шага объяснения с ходом
 // тот же порог — чтобы «ход из урока» не оказался ошибкой, — и ещё ход должен быть
 // единственным: приложение принимает в шаге только его, поэтому другой ход не может
-// быть так же хорош. Печатает таблицу; при любом расхождении выходит с кодом 1.
+// быть так же хорош. Колонка «заметка» у заданий перечисляет ВСЕ ходы вне accept в пределах
+// порога (MultiPV растёт, пока не захватит их все). Печатает таблицу; при расхождении — код 1.
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { registerHooks } from 'node:module';
@@ -13,8 +14,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Chess } from 'chess.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DEPTH = 14;
-const MULTIPV = 5;
+const DEPTH = 18;
+/** Начальное число линий MultiPV; удваивается, пока последняя линия ещё в пределах порога от лучшей. */
+const MULTIPV = 8;
 const THRESHOLD_CP = 50;
 /** Мат в N ходов: больше любой материальной оценки, и чем короче мат, тем выше оценка. */
 const MATE_CP = 100000;
@@ -121,6 +123,16 @@ function san(fen, uci) {
   }
 }
 
+/** Лучшие ходы позиции так, чтобы в список попали все ходы в пределах порога от лучшего. */
+async function allNearBest(fen) {
+  const legal = new Chess(fen).moves().length;
+  for (let k = Math.min(MULTIPV, legal); ; k = Math.min(k * 2, legal)) {
+    const top = await engine.analyse(fen, { multipv: k });
+    const last = top[top.length - 1];
+    if (k >= legal || top.length < k || top[0].cp - last.cp > THRESHOLD_CP) return top;
+  }
+}
+
 function collectItems() {
   const items = [];
   for (const node of CURRICULUM.flatMap((s) => s.nodes).filter((n) => n.kind === 'authored')) {
@@ -148,7 +160,7 @@ await engine.init();
 const rows = [];
 let failed = 0;
 for (const item of collectItems()) {
-  const top = await engine.analyse(item.fen, { multipv: MULTIPV });
+  const top = await allNearBest(item.fen);
   const best = top[0];
   const problems = [];
   const parts = [];
