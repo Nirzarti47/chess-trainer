@@ -1,5 +1,6 @@
-import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { HashRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { AppearanceScreen } from './screens/AppearanceScreen';
+import { LessonScreen, WeakSpotsScreen } from './screens/LessonScreen';
 import { SettingsProvider } from './ui/settings';
 import { TabBar } from './ui/TabBar';
 
@@ -10,6 +11,12 @@ function Placeholder({ title }: { title: string }) {
       <h1>{title}</h1>
     </section>
   );
+}
+
+/** «Слабые места» — урок; остальные режимы появятся вместе с вкладкой «Задачи». */
+function RunRoute() {
+  const { mode } = useParams();
+  return mode === 'weak' ? <WeakSpotsScreen /> : <Placeholder title="Тренировка" />;
 }
 
 /** На экранах урока и решения задач подряд нижние вкладки скрыты. */
@@ -30,8 +37,8 @@ function Layout() {
           <Route path="/profile/appearance" element={<AppearanceScreen />} />
           <Route path="/profile/backup" element={<Placeholder title="Резервная копия" />} />
           <Route path="/profile/about" element={<Placeholder title="О приложении" />} />
-          <Route path="/lesson/:nodeId/:lessonIndex" element={<Placeholder title="Урок" />} />
-          <Route path="/run/:mode" element={<Placeholder title="Тренировка" />} />
+          <Route path="/lesson/:nodeId/:lessonIndex" element={<LessonScreen />} />
+          <Route path="/run/:mode" element={<RunRoute />} />
           <Route path="*" element={<Navigate to="/learn" replace />} />
         </Routes>
       </main>
