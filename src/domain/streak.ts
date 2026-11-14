@@ -4,9 +4,12 @@ import type { DayLog } from './types';
 export type DayState = 'done' | 'forgiven' | 'missed' | 'today' | 'future' | 'before';
 export interface StreakInfo { count: number; skipUsedThisWeek: boolean; week: { day: string; state: DayState }[] }
 
+/** Сколько свободных задач засчитывают день без урока. */
+export const FREE_PUZZLES_PER_DAY = 10;
+
 /** День засчитан: хотя бы один урок или не меньше 10 свободных задач. */
 export function dayCounts(log: DayLog): boolean {
-  return log.lessons >= 1 || log.freePuzzles >= 10;
+  return log.lessons >= 1 || log.freePuzzles >= FREE_PUZZLES_PER_DAY;
 }
 
 /** Серия: засчитанный день +1; первый пропуск в неделе (пн–вс) прощается, второй и следующие обнуляют.

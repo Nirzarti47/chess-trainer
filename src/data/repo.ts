@@ -48,9 +48,13 @@ async function updateProfile(change: (p: Profile) => Profile, now?: Date): Promi
   });
 }
 
+/** Счётчики дня; день без записи — нули. */
+export async function getDay(day: string): Promise<DayLog> {
+  return (await db.days.get(day)) ?? { day, lessons: 0, freePuzzles: 0 };
+}
+
 async function updateDay(day: string, change: (log: DayLog) => DayLog): Promise<void> {
-  const log = (await db.days.get(day)) ?? { day, lessons: 0, freePuzzles: 0 };
-  await db.days.put(change(log));
+  await db.days.put(change(await getDay(day)));
 }
 
 export async function recordTaskResult(r: {

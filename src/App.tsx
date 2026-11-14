@@ -2,6 +2,7 @@ import { HashRouter, Navigate, Route, Routes, useLocation, useParams } from 'rea
 import { AppearanceScreen } from './screens/AppearanceScreen';
 import { LearnScreen } from './screens/LearnScreen';
 import { LessonScreen, WeakSpotsScreen } from './screens/LessonScreen';
+import { PuzzleRunScreen, PuzzlesScreen } from './screens/PuzzlesScreen';
 import { SettingsProvider } from './ui/settings';
 import { TabBar } from './ui/TabBar';
 
@@ -14,10 +15,10 @@ function Placeholder({ title }: { title: string }) {
   );
 }
 
-/** «Слабые места» — урок; остальные режимы появятся вместе с вкладкой «Задачи». */
+/** «Слабые места» — урок; free, theme-<id> и review — поток вкладки «Задачи». */
 function RunRoute() {
   const { mode } = useParams();
-  return mode === 'weak' ? <WeakSpotsScreen /> : <Placeholder title="Тренировка" />;
+  return mode === 'weak' ? <WeakSpotsScreen /> : <PuzzleRunScreen key={mode} />;
 }
 
 /** На экранах урока и решения задач подряд нижние вкладки скрыты. */
@@ -33,7 +34,7 @@ function Layout() {
         <Routes>
           <Route path="/" element={<Navigate to="/learn" replace />} />
           <Route path="/learn" element={<LearnScreen />} />
-          <Route path="/puzzles" element={<Placeholder title="Задачи" />} />
+          <Route path="/puzzles" element={<PuzzlesScreen />} />
           <Route path="/profile" element={<Placeholder title="Профиль" />} />
           <Route path="/profile/appearance" element={<AppearanceScreen />} />
           <Route path="/profile/backup" element={<Placeholder title="Резервная копия" />} />

@@ -10,6 +10,7 @@ import { START_RATING } from '../domain/rating';
 import { weakestThemes } from '../domain/themeStats';
 import type { LessonTask, Puzzle, ThemeId, ThemeStat } from '../domain/types';
 import type { Lesson } from './LessonScreen';
+import { openThemesOf } from './openThemes';
 
 const REINFORCE_SUFFIX = ':reinforce';
 const WEAK_NODE = 'weak';
@@ -63,12 +64,8 @@ async function weakLesson(): Promise<Lesson> {
   const [stats, progress, profile, reviews, seen] = await Promise.all([
     getThemeStats(), getLessonProgress(), getProfile(), getDueReviews(today), getSeenPuzzleIds(),
   ]);
-  const open = buildPath(progress, stats, profile.fastTrackDeclined, reviews.length).sections
-    .flatMap((s) => s.items).filter((i) => i.status !== 'locked').map((i) => i.node);
-
-  let openThemes = [...new Set(open.flatMap((n) => (n.kind === 'theme' && n.themeId ? [n.themeId] : [])))];
-  if (openThemes.length === 0) openThemes = THEMES.filter((t) => t.firstCircle === 1).map((t) => t.id);
-  const circle = Math.max(1, ...open.map((n) => n.circle)) as Circle123;
+  const { themes: openThemes, circle } = openThemesOf(
+    buildPath(progress, stats, profile.fastTrackDeclined, reviews.length));
 
   const ratings = ratingsOf(stats);
   let weakThemes = weakestThemes(stats, openThemes, WEAK_THEMES);

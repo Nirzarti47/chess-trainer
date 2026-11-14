@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
 import {
-  clearActiveLesson, completeLesson, declineFastTrack, getActiveDays, getDueReviews, getLessonProgress,
+  clearActiveLesson, completeLesson, declineFastTrack, getActiveDays, getDay, getDueReviews, getLessonProgress,
   getProfile, getRatingHistory, getSeenPuzzleIds, getSettings, getThemeStats, loadActiveLesson,
   markBackupDone, recordTaskResult, saveActiveLesson, saveSettings, snoozeBackup, type ActiveLesson,
 } from './repo';
@@ -121,6 +121,14 @@ describe('recordTaskResult', () => {
     expect(await getActiveDays()).toEqual(new Set());
     await recordTaskResult(task({ puzzleId: 'p9', source: 'review', rated: false }));
     expect(await getActiveDays()).toEqual(new Set(['2026-11-14']));
+  });
+
+  it('getDay: счётчики дня, а без записи — нули', async () => {
+    expect(await getDay('2026-11-14')).toEqual({ day: '2026-11-14', lessons: 0, freePuzzles: 0 });
+    await recordTaskResult(task({ rated: false }));
+    await recordTaskResult(task({ puzzleId: 'p2', source: 'review', rated: false }));
+    expect(await getDay('2026-11-14')).toEqual({ day: '2026-11-14', lessons: 0, freePuzzles: 2 });
+    expect(await getDay('2026-11-15')).toEqual({ day: '2026-11-15', lessons: 0, freePuzzles: 0 });
   });
 
   it('источник lesson счётчик freePuzzles не трогает', async () => {
