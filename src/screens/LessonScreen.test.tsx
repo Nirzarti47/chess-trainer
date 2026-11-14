@@ -395,6 +395,24 @@ describe('LessonScreen', () => {
     expect(screen.queryByText('Стоит заглянуть в „Слабые места“')).toBeNull();
   });
 
+  it('смена адреса, а новый урок не загрузился: прежний урок не сохраняется под новым адресом', async () => {
+    const factory = vi.fn(async (nodeId: string, _lessonIndex: number) => {
+      if (nodeId !== 'c1:fork') throw new Error('нет такого');
+      return { title: 'Вилка', source: 'lesson' as Source, tasks: [pz('p1'), pz('p2', P2_MOVES)] };
+    });
+    renderLesson({ factory, goTo: '/lesson/c1:pin/0' });
+    await solve('e7e5', P1);
+    await waitInteractive(P2);
+    await waitFor(async () => expect((await loadActiveLesson())?.cursor).toBe(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Перейти' }));
+    expect(await screen.findByText('Урок не найден')).toBeTruthy();
+    await waitFor(() => expect(factory).toHaveBeenLastCalledWith('c1:pin', 0));
+    const saved = await loadActiveLesson();
+    expect(saved?.nodeId).not.toBe('c1:pin');
+    expect(saved).toMatchObject({ nodeId: 'c1:fork', lessonIndex: 0, cursor: 1 });
+  });
+
   it('смена адреса посреди урока: новый урок начинается с первого задания, состояние не переносится', async () => {
     const factory = vi.fn(async (nodeId: string, _lessonIndex: number) => nodeId === 'c1:fork'
       ? { title: 'Вилка', source: 'lesson' as Source, tasks: [pz('p1'), pz('p2', P2_MOVES)] }

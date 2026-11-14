@@ -130,7 +130,8 @@ export function LessonRun({ tasks, source, title, onFinish, onExit, resumeKey, r
 type Phase =
   | { kind: 'loading' }
   | { kind: 'missing' }
-  | { kind: 'run'; lesson: Lesson; resume: RunProgress }
+  /** route — адрес урока, для которого загружен этот ход (`${nodeId}/${lessonIndex}`). */
+  | { kind: 'run'; route: string; lesson: Lesson; resume: RunProgress }
   | { kind: 'summary'; summary: LessonSummaryData; advice: boolean };
 
 function canResume(a: SavedLesson | null, nodeId: string, lessonIndex: number): a is SavedLesson & Lesson {
@@ -148,6 +149,7 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
   const navigate = useNavigate();
   const nodeId = nodeIdProp ?? params.nodeId ?? '';
   const lessonIndex = lessonIndexProp ?? Number(params.lessonIndex);
+  const route = `${nodeId}/${lessonIndex}`;
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
 
   useEffect(() => {
@@ -171,13 +173,13 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
       if (lesson.tasks.length === 0) throw new Error('В уроке нет заданий');
       return { lesson, resume: FRESH };
     })().then(
-      ({ lesson, resume }) => { if (alive) setPhase({ kind: 'run', lesson, resume }); },
+      ({ lesson, resume }) => { if (alive) setPhase({ kind: 'run', route, lesson, resume }); },
       () => { if (alive) setPhase({ kind: 'missing' }); },
     );
     return () => {
       alive = false;
     };
-  }, [nodeId, lessonIndex, factory]);
+  }, [nodeId, lessonIndex, route, factory]);
 
   const toLearn = () => navigate('/learn');
 
@@ -189,7 +191,11 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
       .catch((e: unknown) => console.error('Не удалось записать урок', e));
   }
 
-  switch (phase.kind) {
+  // Сразу после смены адреса phase ещё держит прежний урок: показывать его под новым адресом нельзя,
+  // иначе LessonRun сохранит его задания с ключом нового урока.
+  const shown: Phase = phase.kind === 'run' && phase.route !== route ? { kind: 'loading' } : phase;
+
+  switch (shown.kind) {
     case 'loading':
       return <section className="lesson lesson-message" aria-busy="true" />;
     case 'missing':
@@ -202,11 +208,11 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
     case 'run':
       return (
         <LessonRun
-          key={`${nodeId}/${lessonIndex}`}
-          tasks={phase.lesson.tasks}
-          source={phase.lesson.source}
-          title={phase.lesson.title}
-          resume={phase.resume}
+          key={shown.route}
+          tasks={shown.lesson.tasks}
+          source={shown.lesson.source}
+          title={shown.lesson.title}
+          resume={shown.resume}
           resumeKey={{ nodeId, lessonIndex }}
           onFinish={finish}
           onExit={toLearn}
@@ -214,7 +220,7 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
         />
       );
     case 'summary':
-      return <LessonSummary {...phase.summary} advice={phase.advice} onDone={toLearn} />;
+      return <LessonSummary {...shown.summary} advice={shown.advice} onDone={toLearn} />;
   }
 }
 
