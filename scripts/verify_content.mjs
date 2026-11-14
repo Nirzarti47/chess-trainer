@@ -18,6 +18,8 @@ const DEPTH = 18;
 /** Начальное число линий MultiPV; удваивается, пока последняя линия ещё в пределах порога от лучшей. */
 const MULTIPV = 8;
 const THRESHOLD_CP = 50;
+/** Предупреждение: второй по силе ход тоже явно выигрывает — мат или оценка от +3 пешек. */
+const WIN_CP = 300;
 /** Мат в N ходов: больше любой материальной оценки, и чем короче мат, тем выше оценка. */
 const MATE_CP = 100000;
 const MATE_STEP_CP = 1000;
@@ -158,11 +160,16 @@ function collectItems() {
 // начинается с одного из слов. Без аргументов проверяется всё содержание.
 const only = process.argv.slice(2);
 const items = collectItems().filter((it) => !only.length || only.some((p) => it.where.startsWith(p)));
+if (only.length && !items.length) {
+  console.error(`фильтр ${only.join(' ')} не нашёл ни одного места: проверь название темы`);
+  process.exit(1);
+}
 
 const engine = new Engine();
 await engine.init();
 
 const rows = [];
+const warnings = [];
 let failed = 0;
 for (const item of items) {
   const top = await allNearBest(item.fen);
@@ -184,6 +191,9 @@ for (const item of items) {
     const rival = top.find((t) => t.move !== item.moves[0]);
     if (item.unique && rival && own.cp - rival.cp <= THRESHOLD_CP) problems.push(`не единственный: ${san(item.fen, rival.move)} ${rival.label}`);
     if (rival) note = `следующий ${san(item.fen, rival.move)} ${rival.label}`;
+    // Только предупреждение, код возврата не меняет: пример может не учить теме, если и другой
+    // ход выигрывает, хотя порог 0,5 пройден (мат в 3 рядом с матом в 2, +5 рядом с матом).
+    if (item.unique && rival && rival.cp >= WIN_CP) warnings.push(`${item.where}: ${san(item.fen, item.moves[0])} ${own.label}, но и ${san(item.fen, rival.move)} ${rival.label}`);
   } else {
     // Ходы, которых нет в accept, но которые почти не хуже лучшего: на них стоит взглянуть тренеру.
     const near = top.filter((t) => !item.moves.includes(t.move) && best.cp - t.cp <= THRESHOLD_CP);
@@ -205,6 +215,11 @@ console.log(line(Object.fromEntries(cols.map((c) => [c, c]))));
 console.log(`|${cols.map((c) => '-'.repeat(width[c] + 2)).join('|')}|`);
 for (const r of rows) console.log(line(r));
 console.log();
+if (warnings.length) {
+  console.log(`предупреждения: второй ход тоже выигрывает (мат или от +${WIN_CP / 100}), ${warnings.length}`);
+  for (const w of warnings) console.log(`  ${w}`);
+  console.log();
+}
 if (failed) {
   console.log(`расхождений: ${failed} из ${rows.length}`);
   process.exit(1);
