@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { BackupError, exportBackup, importBackup } from '../data/backup';
 import { markBackupDone } from '../data/repo';
@@ -14,26 +14,38 @@ export const backupFileName = (now: Date) => `chess-trainer-${localDay(now)}.jso
 
 type Status = { kind: 'ok' | 'error'; text: string } | null;
 
-/** Отдаёт файл через системное меню «Поделиться» (iPhone), иначе скачивает.
- *  false — пользователь закрыл меню, файл не сохранён. */
-async function saveFile(blob: Blob, name: string): Promise<boolean> {
-  const file = new File([blob], name, { type: 'application/json' });
-  if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file] });
-      return true;
-    } catch (e: unknown) {
-      if (e instanceof DOMException && e.name === 'AbortError') return false;
-      throw e;
-    }
-  }
-  const url = URL.createObjectURL(blob);
+function download(file: File): void {
+  const url = URL.createObjectURL(file);
   const a = document.createElement('a');
   a.href = url;
-  a.download = name;
+  a.download = file.name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
-  return true;
+}
+
+/** Отдаёт файл через системное меню «Поделиться» (iPhone), иначе скачивает.
+ *  share вызывается синхронно: Safari пускает его только сразу после касания, без await перед ним.
+ *  Если меню отказало (например, NotAllowedError), файл скачивается.
+ *  false — пользователь закрыл меню, файл не сохранён. */
+function saveFile(file: File): Promise<boolean> {
+  if (typeof navigator.share !== 'function' || !navigator.canShare?.({ files: [file] })) {
+    download(file);
+    return Promise.resolve(true);
+  }
+  let shared: Promise<void>;
+  try {
+    shared = navigator.share({ files: [file] });
+  } catch (e: unknown) {
+    shared = Promise.reject(e);
+  }
+  return shared.then(
+    () => true,
+    (e: unknown) => {
+      if (e instanceof DOMException && e.name === 'AbortError') return false;
+      download(file);
+      return true;
+    },
+  );
 }
 
 /** Экран «Резервная копия»: весь прогресс в файл и обратно. reload подменяется в тестах. */
@@ -41,23 +53,51 @@ export function BackupScreen({ reload = () => window.location.reload() }: { relo
   const [status, setStatus] = useState<Status>(null);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
-  async function save() {
+  // Файл копии собирается заранее — при показе экрана и при возвращении в приложение,
+  // чтобы нажатие сразу вызывало share без ожидания чтения базы.
+  useEffect(() => {
+    let alive = true;
+    let build = 0;
+    const prepare = () => {
+      const id = ++build;
+      setFile(null);
+      exportBackup().then(
+        (blob) => {
+          if (alive && id === build) setFile(new File([blob], backupFileName(new Date()), { type: 'application/json' }));
+        },
+        (e: unknown) => {
+          console.error('Не удалось подготовить копию', e);
+          if (alive && id === build) setStatus({ kind: 'error', text: 'Не удалось сохранить файл' });
+        },
+      );
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') prepare(); };
+    prepare();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
+  function save() {
+    if (!file) return;
     setBusy(true);
     setStatus(null);
-    try {
-      const now = new Date();
-      if (await saveFile(await exportBackup(), backupFileName(now))) {
-        await markBackupDone(now);
+    saveFile(file)
+      .then(async (saved) => {
+        if (!saved) return;
+        await markBackupDone(new Date());
         setStatus({ kind: 'ok', text: 'Копия сохранена' });
-      }
-    } catch (e: unknown) {
-      console.error('Не удалось сохранить копию', e);
-      setStatus({ kind: 'error', text: 'Не удалось сохранить файл' });
-    } finally {
-      setBusy(false);
-    }
+      })
+      .catch((e: unknown) => {
+        console.error('Не удалось сохранить копию', e);
+        setStatus({ kind: 'error', text: 'Не удалось сохранить файл' });
+      })
+      .finally(() => setBusy(false));
   }
 
   function choose(e: ChangeEvent<HTMLInputElement>) {
@@ -97,7 +137,7 @@ export function BackupScreen({ reload = () => window.location.reload() }: { relo
       </p>
 
       <div className="profile-actions">
-        <BigButton disabled={busy} onClick={() => void save()}>Сохранить в файл</BigButton>
+        <BigButton disabled={busy || !file} onClick={save}>{file ? 'Сохранить в файл' : 'Готовлю файл…'}</BigButton>
         <BigButton variant="surface" disabled={busy} onClick={() => input.current?.click()}>
           Восстановить из файла
         </BigButton>

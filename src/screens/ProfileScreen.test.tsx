@@ -216,6 +216,55 @@ describe('BackupScreen: сохранение', () => {
     expect((await getProfile()).lastBackupAt).toBeNull();
   });
 
+  it('файл готовится заранее: кнопка неактивна, пока он не готов', async () => {
+    await getProfile();
+    renderAt('/profile/backup');
+    const waiting = screen.getByRole('button', { name: 'Готовлю файл…' }) as HTMLButtonElement;
+    expect(waiting.disabled).toBe(true);
+    const ready = (await screen.findByRole('button', { name: 'Сохранить в файл' })) as HTMLButtonElement;
+    expect(ready.disabled).toBe(false);
+  });
+
+  it('share вызывается в том же такте, что и нажатие, с уже готовым файлом', async () => {
+    stubShare(async () => {});
+    await getProfile();
+    renderAt('/profile/backup');
+    const button = await screen.findByRole('button', { name: 'Сохранить в файл' });
+    fireEvent.click(button);
+    // Никакого await между нажатием и проверкой: Safari пускает share только сразу после касания.
+    expect(nav.share).toHaveBeenCalledTimes(1);
+    const file = ((nav.share as ReturnType<typeof vi.fn>).mock.calls[0][0] as ShareData).files![0];
+    expect(file.name).toBe(`chess-trainer-${today()}.json`);
+    expect(await screen.findByText('Копия сохранена')).toBeTruthy();
+  });
+
+  it('share отклонён (NotAllowedError): файл скачивается, копия отмечена', async () => {
+    stubShare(async () => { throw new DOMException('Нет активации', 'NotAllowedError'); });
+    await getProfile();
+    renderAt('/profile/backup');
+    fireEvent.click(await screen.findByRole('button', { name: 'Сохранить в файл' }));
+    expect(await screen.findByText('Копия сохранена')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(clicked).toHaveLength(1);
+    expect(clicked[0].download).toBe(`chess-trainer-${today()}.json`);
+    expect((await getProfile()).lastBackupAt).not.toBeNull();
+  });
+
+  it('при новом показе экрана файл собирается заново', async () => {
+    stubShare(async () => {});
+    await setProfile({ xp: 10 });
+    renderAt('/profile/backup');
+    await screen.findByRole('button', { name: 'Сохранить в файл' });
+    await setProfile({ xp: 99 });
+    fireEvent(document, new Event('visibilitychange'));
+    expect(screen.getByRole('button', { name: 'Готовлю файл…' })).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Сохранить в файл' }));
+    const file = ((nav.share as ReturnType<typeof vi.fn>).mock.calls[0][0] as ShareData).files![0];
+    const kv = JSON.parse(await file.text()).tables.kv as { key: string; value: { xp: number } }[];
+    expect(kv.find((r) => r.key === 'profile')!.value.xp).toBe(99);
+    expect(await screen.findByText('Копия сохранена')).toBeTruthy();
+  });
+
   it('без «Поделиться» скачивает файл и отмечает копию', async () => {
     await getProfile();
     renderAt('/profile/backup');
