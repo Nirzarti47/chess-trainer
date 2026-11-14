@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BigButton } from '../ui/BigButton';
 import { ProgressBar } from '../ui/ProgressBar';
 import './offline.css';
@@ -17,10 +17,13 @@ export const REQUIRED_FILES = [
 
 const POLL_MS = 300;
 const DONE_PAUSE_MS = 1200;
+/** Сколько ждать хоть одного нового файла в кеше, прежде чем предложить повторить. */
+export const STALL_MS = 25_000;
 /** Кэши, в которые Workbox складывает предзагрузку. */
 const PRECACHE_PREFIX = 'workbox-precache';
 
-type Phase = 'loading' | 'offline' | 'done' | 'app';
+/** stalled — сеть есть, но установка сорвалась или давно не движется. */
+type Phase = 'loading' | 'offline' | 'stalled' | 'done' | 'app';
 
 function readFlag(): boolean {
   try {
@@ -38,11 +41,12 @@ function writeFlag() {
   }
 }
 
-/** Сервис-воркер управляет страницей и все обязательные файлы лежат в Cache Storage. */
-export async function isOfflineReady(): Promise<boolean> {
-  const sw = navigator.serviceWorker;
-  if (!sw.controller) return false;
-  const registration = await sw.getRegistration();
+/**
+ * Сервис-воркер активен и все обязательные файлы лежат в Cache Storage.
+ * Управлять именно этой страницей он не обязан: после жёсткой перезагрузки controller пуст,
+ * но без сети приложение всё равно откроется при следующем запуске.
+ */
+export async function isOfflineReady(registration: ServiceWorkerRegistration | undefined): Promise<boolean> {
   if (!registration?.active || typeof caches === 'undefined') return false;
   // Workbox хранит файлы без хэша в имени с параметром __WB_REVISION__, поэтому ignoreSearch.
   const found = await Promise.all(REQUIRED_FILES.map((file) => caches.match(file, { ignoreSearch: true })));
@@ -61,13 +65,13 @@ async function fetchExpectedCount(): Promise<number | null> {
   }
 }
 
-/** Доля уже сохранённых записей предзагрузки. */
-async function precachedShare(expected: number): Promise<number> {
+/** Сколько записей предзагрузки уже сохранено. */
+async function countPrecached(): Promise<number> {
   let stored = 0;
   for (const name of await caches.keys()) {
     if (name.startsWith(PRECACHE_PREFIX)) stored += (await (await caches.open(name)).keys()).length;
   }
-  return Math.min(stored / expected, 1);
+  return stored;
 }
 
 type FirstLoadScreenProps = {
@@ -82,6 +86,7 @@ type FirstLoadScreenProps = {
  */
 export function FirstLoadScreen({ children, skip = import.meta.env.DEV }: FirstLoadScreenProps) {
   const supported = typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
+  const [startedReady] = useState(() => supported && !skip && readFlag());
   const [phase, setPhase] = useState<Phase>(() => {
     if (skip || !supported || (readFlag() && navigator.serviceWorker.controller)) return 'app';
     return navigator.onLine ? 'loading' : 'offline';
@@ -89,30 +94,64 @@ export function FirstLoadScreen({ children, skip = import.meta.env.DEV }: FirstL
   /** Доля сохранённого; null — измерить нельзя, полоска без процентов. */
   const [progress, setProgress] = useState<number | null>(null);
   const [noteHidden, setNoteHidden] = useState(false);
+  /** Номер попытки: «Повторить» его увеличивает, и слежение начинается заново. */
+  const [attempt, setAttempt] = useState(0);
+  /** Число записей из sw.js; запоминается только удачно полученное. */
+  const expectedRef = useRef<number | null>(null);
 
-  const waiting = phase === 'loading' || phase === 'offline';
+  const waiting = phase === 'loading' || phase === 'offline' || phase === 'stalled';
 
   useEffect(() => {
     if (!waiting) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let expected: Promise<number | null> | undefined;
+    let expectedFetched = false;
+    /** Установка сорвалась или застряла: дальше только «Повторить». */
+    let failed = false;
+    let watched: ServiceWorker | null = null;
+    let lastStored = -1;
+    let lastChange = Date.now();
+
+    const showState = () => setPhase(!navigator.onLine ? 'offline' : failed ? 'stalled' : 'loading');
+    const fail = () => {
+      if (stopped || failed) return;
+      failed = true;
+      showState();
+    };
 
     const tick = async () => {
       try {
-        if (await isOfflineReady()) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (await isOfflineReady(registration)) {
           if (stopped) return;
           writeFlag();
           setProgress(1);
-          setPhase('done');
+          setPhase(startedReady ? 'app' : 'done');
           return;
         }
-        expected ??= fetchExpectedCount();
-        const total = await expected;
-        const share = total ? await precachedShare(total) : null;
+        // Воркер, ушедший в redundant, установку не закончит.
+        const installing = registration?.installing ?? null;
+        if (installing && installing !== watched) {
+          watched = installing;
+          installing.addEventListener('statechange', () => {
+            if (installing.state === 'redundant') fail();
+          });
+        }
+        if (expectedRef.current === null && !expectedFetched) {
+          expectedFetched = true;
+          expectedRef.current = await fetchExpectedCount();
+        }
+        const stored = await countPrecached();
         if (stopped) return;
-        setProgress(share);
-        setPhase(navigator.onLine ? 'loading' : 'offline');
+        if (stored !== lastStored) {
+          lastStored = stored;
+          lastChange = Date.now();
+        } else if (Date.now() - lastChange >= STALL_MS) {
+          failed = true;
+        }
+        const total = expectedRef.current;
+        setProgress(total ? Math.min(stored / total, 1) : null);
+        showState();
       } catch {
         // Cache Storage недоступен на мгновение — проверим в следующий раз
       }
@@ -120,7 +159,7 @@ export function FirstLoadScreen({ children, skip = import.meta.env.DEV }: FirstL
     };
     void tick();
 
-    const onNetwork = () => setPhase(navigator.onLine ? 'loading' : 'offline');
+    const onNetwork = showState;
     window.addEventListener('online', onNetwork);
     window.addEventListener('offline', onNetwork);
     return () => {
@@ -129,7 +168,7 @@ export function FirstLoadScreen({ children, skip = import.meta.env.DEV }: FirstL
       window.removeEventListener('online', onNetwork);
       window.removeEventListener('offline', onNetwork);
     };
-  }, [waiting]);
+  }, [waiting, attempt, startedReady]);
 
   useEffect(() => {
     if (phase !== 'done') return;
@@ -140,7 +179,8 @@ export function FirstLoadScreen({ children, skip = import.meta.env.DEV }: FirstL
   const retry = useCallback(async () => {
     if (!navigator.onLine) return;
     setPhase('loading');
-    // Если установка сорвалась, регистрации нет — тогда загрузить страницу заново.
+    setAttempt((n) => n + 1);
+    // Если установка сорвалась, регистрации может не быть — тогда загрузить страницу заново.
     const registration = await navigator.serviceWorker.getRegistration();
     if (registration) await registration.update().catch(() => undefined);
     else window.location.reload();
@@ -168,7 +208,8 @@ export function FirstLoadScreen({ children, skip = import.meta.env.DEV }: FirstL
       {phase === 'done' && <p className="first-load-text">Готово. Дальше интернет не нужен</p>}
       {phase === 'loading' && <p className="first-load-text">Загружаю задачи и доску. Это один раз, лучше по Wi-Fi</p>}
       {phase === 'offline' && <p className="first-load-text">Нужен интернет для первой загрузки</p>}
-      {phase !== 'offline' &&
+      {phase === 'stalled' && <p className="first-load-text">Загрузка остановилась. Проверь связь и попробуй ещё раз.</p>}
+      {(phase === 'loading' || phase === 'done') &&
         (progress === null ? (
           <div className="progress-bar progress-bar--indeterminate" role="progressbar" aria-label="Загрузка">
             <i />
@@ -176,7 +217,7 @@ export function FirstLoadScreen({ children, skip = import.meta.env.DEV }: FirstL
         ) : (
           <ProgressBar value={progress} label="Загрузка" />
         ))}
-      {phase === 'offline' && <BigButton onClick={() => void retry()}>Повторить</BigButton>}
+      {(phase === 'offline' || phase === 'stalled') && <BigButton onClick={() => void retry()}>Повторить</BigButton>}
     </section>
   );
 }
