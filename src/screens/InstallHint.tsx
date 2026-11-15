@@ -5,7 +5,7 @@ import './offline.css';
 export const INSTALL_HINT_KEY = 'install-hint-shown';
 
 /** Safari на iPhone или iPad, открытый не с домашнего экрана. */
-function isIosBrowserTab(): boolean {
+export function isIosBrowserTab(): boolean {
   const nav = navigator as Navigator & { standalone?: boolean };
   return /iPhone|iPad|iPod/.test(nav.userAgent) && nav.standalone === false;
 }

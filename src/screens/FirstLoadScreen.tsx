@@ -1,24 +1,31 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BigButton } from '../ui/BigButton';
 import { ProgressBar } from '../ui/ProgressBar';
+import { isIosBrowserTab } from './InstallHint';
 import './offline.css';
 
 /** Отметка в localStorage: всё нужное для работы без сети уже сохранено. */
 export const OFFLINE_READY_KEY = 'offline-ready';
 
 /** Файлы, без которых приложение без сети не работает: задачи и движок. */
+export const PUZZLE_FILES = ['./puzzles/c1.json', './puzzles/c2.json', './puzzles/c3.json'];
 export const REQUIRED_FILES = [
-  './puzzles/c1.json',
-  './puzzles/c2.json',
-  './puzzles/c3.json',
+  ...PUZZLE_FILES,
   './engine/stockfish-19-lite-single.js',
   './engine/stockfish-19-lite-single.wasm',
 ];
 
 const POLL_MS = 300;
 const DONE_PAUSE_MS = 1200;
-/** Сколько ждать хоть одного нового файла в кеше, прежде чем предложить повторить. */
-export const STALL_MS = 25_000;
+/** Сколько ждать хоть одного нового файла в кеше, прежде чем предложить повторить.
+ *  Крупнейший файл задач после сжатия около 1,2 МБ: на 100 кбит/с это ~95 с. */
+export const STALL_MS = 90_000;
+/** Доля объёма, которая приходится на три файла задач. */
+const PUZZLES_SHARE = 0.7;
+
+/** Текст для вкладки Safari на iPhone: у значка на домашнем экране своё хранилище. */
+export const IOS_TAB_NOTE = 'Сначала добавь приложение на экран «Домой»: «Поделиться» → «На экран «Домой»». '
+  + 'Потом открой его оттуда при интернете. То, что пройдено в Safari, в приложение не перенесётся.';
 /** Кэши, в которые Workbox складывает предзагрузку. */
 const PRECACHE_PREFIX = 'workbox-precache';
 
@@ -65,6 +72,23 @@ async function fetchExpectedCount(): Promise<number | null> {
   }
 }
 
+/** Сколько из трёх файлов задач уже в кэше. */
+async function countPuzzleFiles(): Promise<number> {
+  const found = await Promise.all(PUZZLE_FILES.map((file) => caches.match(file, { ignoreSearch: true })));
+  return found.filter(Boolean).length;
+}
+
+/**
+ * Доля скачанного по объёму: файлы задач — около 70 % байт при трёх записях из ~120,
+ * поэтому 0,3 даёт число мелких записей и 0,7 — число файлов задач.
+ */
+export function loadedShare(stored: number, total: number, puzzles: number): number {
+  const big = PUZZLE_FILES.length;
+  if (total <= big) return Math.min(stored / total, 1);
+  const small = Math.min(Math.max(stored - puzzles, 0) / (total - big), 1);
+  return Math.min((1 - PUZZLES_SHARE) * small + PUZZLES_SHARE * (puzzles / big), 1);
+}
+
 /** Сколько записей предзагрузки уже сохранено. */
 async function countPrecached(): Promise<number> {
   let stored = 0;
@@ -87,6 +111,7 @@ type FirstLoadScreenProps = {
 export function FirstLoadScreen({ children, skip = import.meta.env.DEV }: FirstLoadScreenProps) {
   const supported = typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
   const [startedReady] = useState(() => supported && !skip && readFlag());
+  const [iosTab] = useState(() => typeof navigator !== 'undefined' && isIosBrowserTab());
   const [phase, setPhase] = useState<Phase>(() => {
     if (skip || !supported || (readFlag() && navigator.serviceWorker.controller)) return 'app';
     return navigator.onLine ? 'loading' : 'offline';
@@ -142,15 +167,18 @@ export function FirstLoadScreen({ children, skip = import.meta.env.DEV }: FirstL
           expectedRef.current = await fetchExpectedCount();
         }
         const stored = await countPrecached();
+        const puzzles = await countPuzzleFiles();
         if (stopped) return;
         if (stored !== lastStored) {
           lastStored = stored;
           lastChange = Date.now();
+          // Записи прибавляются — значит, установка идёт (или пошла новая после сбоя).
+          failed = false;
         } else if (Date.now() - lastChange >= STALL_MS) {
           failed = true;
         }
         const total = expectedRef.current;
-        setProgress(total ? Math.min(stored / total, 1) : null);
+        setProgress(total ? loadedShare(stored, total, puzzles) : null);
         showState();
       } catch {
         // Cache Storage недоступен на мгновение — проверим в следующий раз
@@ -218,6 +246,7 @@ export function FirstLoadScreen({ children, skip = import.meta.env.DEV }: FirstL
           <ProgressBar value={progress} label="Загрузка" />
         ))}
       {(phase === 'offline' || phase === 'stalled') && <BigButton onClick={() => void retry()}>Повторить</BigButton>}
+      {iosTab && waiting && <p className="first-load-text first-load-ios">{IOS_TAB_NOTE}</p>}
     </section>
   );
 }

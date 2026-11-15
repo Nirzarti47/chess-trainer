@@ -1,6 +1,8 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { FirstLoadScreen, OFFLINE_READY_KEY, REQUIRED_FILES } from './FirstLoadScreen';
+import { FirstLoadScreen, IOS_TAB_NOTE, loadedShare, OFFLINE_READY_KEY, PUZZLE_FILES, REQUIRED_FILES } from './FirstLoadScreen';
+
+const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile Safari/604.1';
 
 type Env = {
   controller?: boolean;
@@ -96,12 +98,23 @@ describe('FirstLoadScreen', () => {
     expect(screen.getByText('Загружаю задачи и доску. Это один раз, лучше по Wi-Fi')).toBeTruthy();
   });
 
-  it('пока идёт загрузка, показывает текст и долю сохранённого', async () => {
+  it('пока идёт загрузка, показывает текст и долю сохранённого по объёму', async () => {
+    // 4 мелкие записи из 7, файлов задач нет: 0,3 × 4/7 ≈ 17 %.
     setEnv({ active: true, stored: 4, expected: 10 });
     renderScreen();
     expect(screen.getByText('Загружаю задачи и доску. Это один раз, лучше по Wi-Fi')).toBeTruthy();
-    await vi.waitFor(() => expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('40'));
+    await vi.waitFor(() => expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('17'));
     expect(screen.queryByText('Приложение')).toBeNull();
+  });
+
+  it('файлы задач дают 70 % полоски', async () => {
+    // Все 7 мелких и 2 из 3 файлов задач: 0,3 + 0,7 × 2/3 ≈ 77 %.
+    setEnv({ active: true, stored: 9, expected: 10, cached: PUZZLE_FILES.slice(0, 2) });
+    renderScreen();
+    await vi.waitFor(() => expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('77'));
+    expect(loadedShare(10, 10, 3)).toBe(1);
+    expect(loadedShare(0, 10, 0)).toBe(0);
+    expect(loadedShare(2, 3, 0)).toBeCloseTo(2 / 3);
   });
 
   it('когда всё сохранено, говорит «Готово» и открывает приложение', async () => {
@@ -158,21 +171,66 @@ describe('FirstLoadScreen', () => {
     expect(screen.getByText(LOADING)).toBeTruthy();
   });
 
-  it('если сохранение 25 секунд стоит на месте, предлагает повторить, и повтор заново заводит отсчёт', async () => {
+  it('если сохранение 90 секунд стоит на месте, предлагает повторить, и повтор заново заводит отсчёт', async () => {
     vi.useFakeTimers();
     setEnv({ active: true, stored: 3, expected: 10 });
     renderScreen();
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
+    await act(() => vi.advanceTimersByTimeAsync(85_000));
     expect(screen.getByText(LOADING)).toBeTruthy();
     await act(() => vi.advanceTimersByTimeAsync(6_000));
     expect(screen.getByText(STALLED)).toBeTruthy();
 
     act(() => screen.getByRole('button', { name: 'Повторить' }).click());
-    await act(() => vi.advanceTimersByTimeAsync(20_000));
+    await act(() => vi.advanceTimersByTimeAsync(85_000));
     expect(update).toHaveBeenCalled();
     expect(screen.getByText(LOADING)).toBeTruthy();
     await act(() => vi.advanceTimersByTimeAsync(6_000));
     expect(screen.getByText(STALLED)).toBeTruthy();
+  });
+
+  it('после остановки новая запись в кэше возвращает «Загружаю» без нажатия', async () => {
+    vi.useFakeTimers();
+    setEnv({ active: true, stored: 3, expected: 10 });
+    renderScreen();
+    await act(() => vi.advanceTimersByTimeAsync(91_000));
+    expect(screen.getByText(STALLED)).toBeTruthy();
+
+    setEnv({ active: true, stored: 4, expected: 10 });
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+    expect(screen.getByText(LOADING)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Повторить' })).toBeNull();
+  });
+
+  it('во вкладке Safari на iPhone просит сначала поставить значок, загрузку не держит', async () => {
+    Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => IPHONE_UA });
+    Object.defineProperty(navigator, 'standalone', { configurable: true, get: () => false });
+    try {
+      setEnv({ active: true, stored: 4, expected: 10 });
+      renderScreen();
+      expect(screen.getByText(IOS_TAB_NOTE)).toBeTruthy();
+      expect(screen.getByText(LOADING)).toBeTruthy();
+      await vi.waitFor(() => expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('17'));
+    } finally {
+      Reflect.deleteProperty(navigator, 'userAgent');
+      Reflect.deleteProperty(navigator, 'standalone');
+    }
+  });
+
+  it('с домашнего экрана и не на iPhone совета про значок нет', () => {
+    Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => IPHONE_UA });
+    Object.defineProperty(navigator, 'standalone', { configurable: true, get: () => true });
+    try {
+      setEnv({ active: true, stored: 4, expected: 10 });
+      const { unmount } = renderScreen();
+      expect(screen.queryByText(IOS_TAB_NOTE)).toBeNull();
+      unmount();
+    } finally {
+      Reflect.deleteProperty(navigator, 'userAgent');
+      Reflect.deleteProperty(navigator, 'standalone');
+    }
+    setEnv({ active: true, stored: 4, expected: 10 });
+    renderScreen();
+    expect(screen.queryByText(IOS_TAB_NOTE)).toBeNull();
   });
 
   it('после «Повторить» число файлов в sw.js запрашивается заново', async () => {
@@ -183,6 +241,7 @@ describe('FirstLoadScreen', () => {
 
     setEnv({ active: true, stored: 5, expected: 10 });
     await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
-    await vi.waitFor(() => expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50'));
+    // 5 мелких из 7: 0,3 × 5/7 ≈ 21 %.
+    await vi.waitFor(() => expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('21'));
   });
 });
