@@ -141,16 +141,21 @@ export async function deleteReviews(puzzleIds: string[]): Promise<void> {
 /** Сколько разных задач решено хотя бы раз без ошибки и подсказки. */
 export async function getSolvedPuzzleCount(): Promise<number> {
   const ids = new Set<string>();
-  await db.attempts.each((a) => {
+  for (const a of await db.attempts.toArray()) {
     if (a.result === 'clean' && a.puzzleId !== undefined) ids.add(a.puzzleId);
-  });
+  }
   return ids.size;
 }
 
-/** Задачи, у которых есть хотя бы одна записанная попытка. */
+/** Задачи, у которых есть хотя бы одна записанная попытка.
+ *  Читаем таблицу целиком (getAll), без курсоров: на курсор по уникальным ключам индекса Safari на iPhone
+ *  отвечает «UnknownError: Unable to open cursor», и урок темы не открывался. */
 export async function getSeenPuzzleIds(): Promise<Set<string>> {
-  const ids = await db.attempts.orderBy('puzzleId').uniqueKeys();
-  return new Set(ids as string[]);
+  const ids = new Set<string>();
+  for (const a of await db.attempts.toArray()) {
+    if (a.puzzleId !== undefined) ids.add(a.puzzleId);
+  }
+  return ids;
 }
 
 export async function getRatingHistory(): Promise<{ at: number; rating: number }[]> {

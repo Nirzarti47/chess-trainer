@@ -127,6 +127,22 @@ describe('recordTaskResult', () => {
     expect(await getSolvedPuzzleCount()).toBe(2);
   });
 
+  it('список решённых задач читается без курсоров: Safari на iPhone отвечает на них «Unable to open cursor»', async () => {
+    await recordTaskResult(task({ puzzleId: 'a' }));
+    await recordTaskResult(task({ puzzleId: undefined, puzzleRating: undefined }));
+    const spies = [
+      vi.spyOn(IDBIndex.prototype, 'openCursor'), vi.spyOn(IDBIndex.prototype, 'openKeyCursor'),
+      vi.spyOn(IDBObjectStore.prototype, 'openCursor'), vi.spyOn(IDBObjectStore.prototype, 'openKeyCursor'),
+    ];
+    try {
+      expect(await getSeenPuzzleIds()).toEqual(new Set(['a']));
+      expect(await getSolvedPuzzleCount()).toBe(1);
+      for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+  });
+
   it('getSeenPuzzleIds — задачи, у которых есть попытка', async () => {
     await recordTaskResult(task({ puzzleId: 'a' }));
     await recordTaskResult(task({ puzzleId: 'b', rated: false }));
