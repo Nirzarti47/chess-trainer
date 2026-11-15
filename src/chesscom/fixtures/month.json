@@ -1,0 +1,59 @@
+{
+  "games": [
+    {
+      "url": "https://www.chess.com/game/live/1001",
+      "pgn": "[Event \"Live Chess\"]\n[Site \"Chess.com\"]\n[White \"Owner_Test\"]\n[Black \"rival_one\"]\n[Result \"1-0\"]\n[TimeControl \"600\"]\n\n1. e4 {[%clk 0:09:58.1]} 1... e5 {[%clk 0:09:57.0]} 2. Bc4 {[%clk 0:09:55.2]} 2... Nc6 {[%clk 0:09:50.4]} 3. Qh5 {[%clk 0:09:52.0]} 3... Nf6 {[%clk 0:09:45.3]} 4. Qxf7# {[%clk 0:09:50.1]} 1-0",
+      "time_control": "600",
+      "end_time": 1790000000,
+      "uuid": "uuid-1001",
+      "time_class": "rapid",
+      "rules": "chess",
+      "white": { "rating": 800, "result": "win", "username": "Owner_Test" },
+      "black": { "rating": 780, "result": "checkmated", "username": "rival_one" }
+    },
+    {
+      "url": "https://www.chess.com/game/live/1002",
+      "pgn": "[Event \"Live Chess\"]\n[Site \"Chess.com\"]\n[White \"rival_two\"]\n[Black \"owner_test\"]\n[Result \"1-0\"]\n[TimeControl \"600\"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0",
+      "time_control": "600",
+      "end_time": 1790001000,
+      "uuid": "uuid-1002",
+      "time_class": "rapid",
+      "rules": "chess",
+      "white": { "rating": 820, "result": "win", "username": "rival_two" },
+      "black": { "rating": 805, "result": "resigned", "username": "owner_test" }
+    },
+    {
+      "url": "https://www.chess.com/game/live/1003",
+      "pgn": "[Event \"Live Chess\"]\n[Site \"Chess.com\"]\n[White \"rival_one\"]\n[Black \"Owner_Test\"]\n[Result \"1/2-1/2\"]\n[TimeControl \"180\"]\n\n1. d4 d5 2. c4 e6 1/2-1/2",
+      "time_control": "180",
+      "end_time": 1790002000,
+      "uuid": "uuid-1003",
+      "time_class": "blitz",
+      "rules": "chess",
+      "white": { "rating": 790, "result": "agreed", "username": "rival_one" },
+      "black": { "rating": 795, "result": "agreed", "username": "Owner_Test" }
+    },
+    {
+      "url": "https://www.chess.com/game/live/1004",
+      "pgn": "[Event \"Live Chess\"]\n[Site \"Chess.com\"]\n[Variant \"Chess960\"]\n[White \"Owner_Test\"]\n[Black \"rival_two\"]\n[Result \"1-0\"]\n\n1. e4 e5 1-0",
+      "time_control": "600",
+      "end_time": 1790003000,
+      "uuid": "uuid-1004",
+      "time_class": "rapid",
+      "rules": "chess960",
+      "white": { "rating": 800, "result": "win", "username": "Owner_Test" },
+      "black": { "rating": 810, "result": "resigned", "username": "rival_two" }
+    },
+    {
+      "url": "https://www.chess.com/game/live/1005",
+      "pgn": "",
+      "time_control": "600",
+      "end_time": 1790004000,
+      "uuid": "uuid-1005",
+      "time_class": "rapid",
+      "rules": "chess",
+      "white": { "rating": 800, "result": "win", "username": "Owner_Test" },
+      "black": { "rating": 810, "result": "abandoned", "username": "rival_two" }
+    }
+  ]
+}
