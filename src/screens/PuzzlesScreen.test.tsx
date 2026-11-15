@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { CURRICULUM } from '../content/curriculum';
 import { BANDS, THEMES } from '../content/themes';
 import { db } from '../data/db';
 import { localDay } from '../domain/dates';
@@ -10,9 +11,10 @@ import { PuzzleRunScreen, PuzzlesScreen } from './PuzzlesScreen';
 
 // Задачи кругов: по 30 на каждую тему в коридоре круга.
 const pools = vi.hoisted(() => ({ byCircle: new Map<number, Puzzle[]>() }));
-vi.mock('../data/puzzleStore', async () => {
+vi.mock('../data/puzzleStore', async (importOriginal) => {
   const { fakePool: makePool } = await import('../domain/testPool');
   return {
+    ...(await importOriginal<typeof import('../data/puzzleStore')>()),
     loadCircle: vi.fn(async (c: number) => makePool(pools.byCircle.get(c) ?? [])),
     findPuzzle: vi.fn(async (id: string) => [...pools.byCircle.values()].flat().find((p) => p.id === id)),
   };
@@ -178,6 +180,26 @@ describe('поток задач', () => {
     expect(ids.size).toBe(6);
   });
 
+  it('открыт круг 2, рейтинг темы 700: задачи из коридоров кругов 1–2 около 580, а не от 900', async () => {
+    const all = CURRICULUM.flatMap((s) => s.nodes);
+    const upTo = all.findIndex((n) => n.id === 'c2:deflection');
+    await db.lessons.bulkPut(all.slice(0, upTo).flatMap((n) => Array.from({ length: n.lessons },
+      (_, i) => ({ nodeId: n.id, lessonIndex: i, clean: 10, total: 10 }))));
+    await db.themeStats.put({ theme: 'fork', rating: 700, solved: 30, clean: 20 });
+    renderAt('/run/theme-fork');
+    const id = await taskId();
+    expect(id.startsWith('c1-')).toBe(true);
+    expect(Math.abs(pools.byCircle.get(1)!.find((x) => x.id === id)!.rating - 580)).toBeLessThanOrEqual(75);
+  });
+
+  it('открыт только круг 1, рейтинг темы 1200: задачи остаются в коридоре круга 1', async () => {
+    await db.themeStats.put({ theme: 'fork', rating: 1200, solved: 30, clean: 20 });
+    renderAt('/run/theme-fork');
+    const id = await taskId();
+    expect(id.startsWith('c1-')).toBe(true);
+    expect(pools.byCircle.get(1)!.find((x) => x.id === id)!.rating).toBeLessThan(900);
+  });
+
   it('десять задач засчитывают день', async () => {
     renderAt('/run/free');
     for (let i = 0; i < 10; i++) await finish();
@@ -238,6 +260,8 @@ describe('повторение', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Решить' }));
     expect(await screen.findByText('На сегодня всё повторено')).toBeTruthy();
+    // Запись повторения, чьей задачи нет в базе, удалена.
+    expect(await db.reviews.get('нет-такой')).toBeUndefined();
     expect(recordTaskResult).toHaveBeenCalledTimes(2);
     expect(recordTaskResult.mock.calls.map(([r]) => [r.puzzleId, r.source, r.rated, r.result])).toEqual([
       [shown[0], 'review', false, 'mistake'],

@@ -2,15 +2,17 @@ import { CURRICULUM, type PathNode, type Section } from '../content/curriculum';
 import { getAuthoredLesson, getExplain } from '../content/explanations';
 import { THEMES } from '../content/themes';
 import { findPuzzle, loadCircle, type Circle123 } from '../data/puzzleStore';
-import { getDueReviews, getLessonProgress, getProfile, getSeenPuzzleIds, getThemeStats } from '../data/repo';
+import {
+  deleteReviews, getDueReviews, getLessonProgress, getProfile, getSeenPuzzleIds, getThemeStats,
+} from '../data/repo';
 import { localDay } from '../domain/dates';
-import { bandOf, buildExam, buildThemeLesson, buildWeakSpots } from '../domain/lessonBuilder';
+import { buildExam, buildThemeLesson, buildWeakSpots } from '../domain/lessonBuilder';
 import { buildPath } from '../domain/path';
 import { START_RATING } from '../domain/rating';
 import { weakestThemes } from '../domain/themeStats';
 import type { LessonTask, Puzzle, ThemeId, ThemeStat } from '../domain/types';
 import type { Lesson } from './LessonScreen';
-import { openThemesOf } from './openThemes';
+import { loadOpenPool, openBand, openThemesOf } from './openThemes';
 
 const REINFORCE_SUFFIX = ':reinforce';
 const WEAK_NODE = 'weak';
@@ -33,12 +35,13 @@ function themesBefore(node: PathNode): ThemeId[] {
 /** Урок темы: объяснение, затем задачи с подстройкой под рейтинг и с хвостом из слабых тем. */
 async function themeLesson(node: PathNode, mode: 'full' | 'reminder', title: string): Promise<Lesson> {
   const themeId = node.themeId!;
-  const [pool, stats, seen] = await Promise.all([
-    loadCircle(node.circle as Circle123), getThemeStats(), getSeenPuzzleIds(),
+  const [pool, stats, seen, profile] = await Promise.all([
+    loadCircle(node.circle as Circle123), getThemeStats(), getSeenPuzzleIds(), getProfile(),
   ]);
   const ratings = ratingsOf(stats);
   const puzzles = buildThemeLesson({
-    node, pool, themeRating: ratings[themeId] ?? START_RATING,
+    // Тема без статистики целится от общего рейтинга, как свободные задачи.
+    node, pool, themeRating: ratings[themeId] ?? profile.rating,
     weakThemes: weakestThemes(stats, themesBefore(node), WEAK_THEMES), weakRatings: ratings, seen, rng: Math.random,
   });
   const explain: LessonTask[] = getExplain(themeId, mode).map((step) => ({ kind: 'explain', step }));
@@ -58,7 +61,7 @@ async function examLesson(section: Section): Promise<Lesson> {
   return { title: 'Контрольная', source: 'exam', tasks: asPuzzleTasks(puzzles) };
 }
 
-/** «Слабые места»: задачи со сроком повторения плюс слабейшие из открытых тем в коридоре самого высокого открытого круга. */
+/** «Слабые места»: задачи со сроком повторения плюс слабейшие из открытых тем в коридоре кругов 1..старший открытый. */
 async function weakLesson(): Promise<Lesson> {
   const today = localDay(new Date());
   const [stats, progress, profile, reviews, seen] = await Promise.all([
@@ -76,10 +79,12 @@ async function weakLesson(): Promise<Lesson> {
   }
 
   const [pool, found] = await Promise.all([
-    loadCircle(circle), Promise.all(reviews.map((r) => findPuzzle(r.puzzleId))),
+    loadOpenPool(circle), Promise.all(reviews.map((r) => findPuzzle(r.puzzleId))),
   ]);
   const due = found.filter((p): p is Puzzle => p !== undefined);
-  const puzzles = buildWeakSpots({ due, weakThemes, ratings, pool, band: bandOf(circle), seen, rng: Math.random });
+  // Задачи нет в базе (база пересобрана): запись повторения больше не нужна.
+  await deleteReviews(reviews.filter((_, i) => found[i] === undefined).map((r) => r.puzzleId));
+  const puzzles = buildWeakSpots({ due, weakThemes, ratings, pool, band: openBand(circle), seen, rng: Math.random });
   return { title: 'Слабые места', source: 'weak', tasks: asPuzzleTasks(puzzles) };
 }
 

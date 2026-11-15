@@ -9,9 +9,10 @@ import { lessonFactory } from './lessonFactory';
 
 // Задачи кругов: по 30 на каждую тему в коридоре круга.
 const pools = vi.hoisted(() => ({ byCircle: new Map<number, Puzzle[]>() }));
-vi.mock('../data/puzzleStore', async () => {
+vi.mock('../data/puzzleStore', async (importOriginal) => {
   const { fakePool: makePool } = await import('../domain/testPool');
   return {
+    ...(await importOriginal<typeof import('../data/puzzleStore')>()),
     loadCircle: vi.fn(async (c: number) => makePool(pools.byCircle.get(c) ?? [])),
     findPuzzle: vi.fn(async (id: string) => [...pools.byCircle.values()].flat().find((p) => p.id === id)),
   };
@@ -96,10 +97,13 @@ describe('lessonFactory: урок темы', () => {
     expect([...args.seen]).toEqual(['c1-fork-0']);
   });
 
-  it('без статистики темы — стартовый рейтинг и нет слабых тем', async () => {
+  it('без статистики темы — общий рейтинг и нет слабых тем', async () => {
     await lessonFactory('c1:mateIn1', 0);
-    const args = buildThemeLesson.mock.calls[0][0];
-    expect(args.themeRating).toBe(600);
+    expect(buildThemeLesson.mock.calls[0][0].themeRating).toBe(600);
+    await db.kv.put({ key: 'profile', value: { ...(await db.kv.get('profile'))!.value as object, rating: 820 } });
+    await lessonFactory('c1:mateIn1', 1);
+    const args = buildThemeLesson.mock.calls[1][0];
+    expect(args.themeRating).toBe(820);
     expect(args.weakThemes).toEqual([]);
   });
 
@@ -154,6 +158,8 @@ describe('lessonFactory: «Слабые места»', () => {
     expect(args.band).toEqual(BANDS[1]);
     expect(args.weakThemes).toEqual(['mateIn1', 'hangingPiece', 'fork']);
     expect(puzzles(lesson.tasks)[0].id).toBe('c1-pin-3');
+    expect(await db.reviews.get('нет-такой')).toBeUndefined();
+    expect(await db.reviews.count()).toBe(2);
   });
 
   it('слабейшие открытые темы по статистике', async () => {
@@ -163,7 +169,7 @@ describe('lessonFactory: «Слабые места»', () => {
     expect(buildWeakSpots.mock.calls[0][0].weakThemes).toEqual(['mateIn1']);
   });
 
-  it('если слабейших нет: открытые темы с наименьшим рейтингом; коридор самого высокого открытого круга', async () => {
+  it('если слабейших нет: открытые темы с наименьшим рейтингом; коридор кругов 1..старший открытый', async () => {
     const all = CURRICULUM.flatMap((s) => s.nodes);
     const upTo = all.findIndex((n) => n.id === 'c2:deflection');
     await db.lessons.bulkPut(all.slice(0, upTo).flatMap((n) => Array.from({ length: n.lessons }, (_, i) => row(n.id, i))));
@@ -174,7 +180,11 @@ describe('lessonFactory: «Слабые места»', () => {
     const args = buildWeakSpots.mock.calls[0][0];
     // deflection текущая и без статистики — стартовые 600.
     expect(args.weakThemes).toEqual(['deflection', 'pin', 'fork']);
-    expect(args.band).toEqual(BANDS[2]);
+    expect(args.band).toEqual([BANDS[1][0], BANDS[2][1]]);
+    // Рейтинги около 600: задачи из коридора круга 1, хотя открыт круг 2.
+    expect(args.pool.byId('c1-fork-0')).toBeDefined();
+    expect(args.pool.byId('c2-fork-0')).toBeDefined();
+    expect(puzzles((await lessonFactory('weak', 1)).tasks).every((p) => p.id.startsWith('c1-'))).toBe(true);
   });
 });
 

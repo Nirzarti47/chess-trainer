@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { BANDS, THEMES } from '../content/themes';
-import { findPuzzle, loadCircle, type PuzzlePool } from '../data/puzzleStore';
+import { THEMES } from '../content/themes';
+import { findPuzzle, type PuzzlePool } from '../data/puzzleStore';
 import {
-  getDay, getDueReviews, getLessonProgress, getProfile, getSeenPuzzleIds, getThemeStats, recordTaskResult,
+  deleteReviews, getDay, getDueReviews, getLessonProgress, getProfile, getSeenPuzzleIds, getThemeStats, recordTaskResult,
 } from '../data/repo';
 import { bestReply as engineBestReply, warmUp as engineWarmUp } from '../engine/engine';
 import { localDay } from '../domain/dates';
@@ -14,7 +14,7 @@ import { dayCounts, FREE_PUZZLES_PER_DAY } from '../domain/streak';
 import type { DayLog, Puzzle, ThemeId, ThemeStat, TaskResult } from '../domain/types';
 import { BigButton } from '../ui/BigButton';
 import { ProgressBar } from '../ui/ProgressBar';
-import { openThemesOf } from './openThemes';
+import { loadOpenPool, openBand, openThemesOf } from './openThemes';
 import { TaskRunner, type BestReply } from './TaskRunner';
 import './LessonScreen.css';
 import './PuzzlesScreen.css';
@@ -180,9 +180,9 @@ function PuzzleStream({ theme, onExit, bestReply }: { theme?: ThemeId; onExit():
     (async (): Promise<StreamPhase> => {
       const open = await loadOpen();
       if (theme !== undefined && !open.themes.includes(theme)) return { kind: 'closed' };
-      const [pool, seen] = await Promise.all([loadCircle(open.circle), getSeenPuzzleIds()]);
+      const [pool, seen] = await Promise.all([loadOpenPool(open.circle), getSeenPuzzleIds()]);
       if (!alive) return { kind: 'loading' };
-      const c: StreamCtx = { pool, band: BANDS[open.circle], themes: open.themes, seen: new Set(seen) };
+      const c: StreamCtx = { pool, band: openBand(open.circle), themes: open.themes, seen: new Set(seen) };
       ctx.current = c;
       return nextPhase(c, open.stats, open.profile.rating, open.day, null, 0);
     })().then(
@@ -235,7 +235,7 @@ function PuzzleStream({ theme, onExit, bestReply }: { theme?: ThemeId; onExit():
           <div className="lesson-top">
             <CloseButton onClick={onExit} />
             <DayLine day={phase.day} />
-            {phase.delta !== null && (
+            {phase.delta !== null && phase.delta !== 0 && (
               <span className={`stream-delta stream-delta--${phase.delta < 0 ? 'down' : 'up'}`}>
                 {signed(phase.delta)}
               </span>
@@ -260,9 +260,14 @@ function ReviewRun({ onExit, bestReply }: { onExit(): void; bestReply: BestReply
   useEffect(() => {
     let alive = true;
     getDueReviews(today())
-      .then((due) => Promise.all(due.map((r) => findPuzzle(r.puzzleId))))
+      .then(async (due) => {
+        const found = await Promise.all(due.map((r) => findPuzzle(r.puzzleId)));
+        // Задачи нет в базе (база пересобрана): запись повторения больше не нужна.
+        await deleteReviews(due.filter((_, i) => found[i] === undefined).map((r) => r.puzzleId));
+        return found.filter((p): p is Puzzle => p !== undefined);
+      })
       .then(
-        (found) => { if (alive) setQueue(found.filter((p): p is Puzzle => p !== undefined)); },
+        (found) => { if (alive) setQueue(found); },
         (e: unknown) => {
           console.error('Не удалось загрузить повторение', e);
           if (alive) setFailed(true);

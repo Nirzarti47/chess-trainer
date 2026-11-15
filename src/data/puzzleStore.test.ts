@@ -72,6 +72,21 @@ describe('puzzleStore', () => {
     expect(fetchMock).toHaveBeenCalledWith('./puzzles/c1.json');
   });
 
+  it('mergePools: query, byId и count по всем кругам', async () => {
+    const { loadCircle: lc, mergePools } = await import('./puzzleStore');
+    const pool = mergePools([await lc(1), await lc(2)]);
+    expect(pool.query({ theme: 'pin', min: 400, max: 1300, exclude: none, limit: 10 }).map((p) => p.id))
+      .toEqual(['a', 'e']);
+    expect(pool.query({ theme: 'pin', min: 400, max: 1300, exclude: none, limit: 1, near: 950 }).map((p) => p.id))
+      .toEqual(['e']);
+    expect(pool.query({ theme: 'fork', min: 400, max: 1300, exclude: none, limit: 2, near: 1200 }).map((p) => p.id))
+      .toEqual(['d', 'c']);
+    expect(pool.byId('e')?.rating).toBe(1000);
+    expect(pool.byId('a')?.rating).toBe(450);
+    expect(pool.byId('f')).toBeUndefined();
+    expect(pool.count('pin')).toBe(2);
+  });
+
   it('findPuzzle ищет по всем кругам', async () => {
     const { findPuzzle: fp } = await import('./puzzleStore');
     expect((await fp('f'))?.id).toBe('f');

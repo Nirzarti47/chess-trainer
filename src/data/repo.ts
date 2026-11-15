@@ -130,6 +130,11 @@ export async function getDueReviews(today: string): Promise<ReviewItem[]> {
   return db.reviews.where('dueDay').belowOrEqual(today).toArray();
 }
 
+/** Убирает записи повторения (например, тех задач, которых больше нет в базе). */
+export async function deleteReviews(puzzleIds: string[]): Promise<void> {
+  if (puzzleIds.length > 0) await db.reviews.bulkDelete(puzzleIds);
+}
+
 /** Задачи, у которых есть хотя бы одна записанная попытка. */
 export async function getSeenPuzzleIds(): Promise<Set<string>> {
   const ids = await db.attempts.orderBy('puzzleId').uniqueKeys();

@@ -42,6 +42,30 @@ export function createPool(rows: PuzzleRow[]): PuzzlePool {
   };
 }
 
+/** Один пул из нескольких кругов. Круги не пересекаются по рейтингу, поэтому без near порядок остаётся
+ *  по возрастанию рейтинга, если пулы переданы по возрастанию кругов. */
+export function mergePools(pools: PuzzlePool[]): PuzzlePool {
+  if (pools.length === 1) return pools[0];
+  return {
+    query(q) {
+      const found = pools.flatMap((p) => p.query(q));
+      if (q.near !== undefined) {
+        const near = q.near;
+        found.sort((a, b) => Math.abs(a.rating - near) - Math.abs(b.rating - near));
+      }
+      return found.slice(0, Math.max(q.limit, 0));
+    },
+    byId(id) {
+      for (const p of pools) {
+        const found = p.byId(id);
+        if (found) return found;
+      }
+      return undefined;
+    },
+    count: (theme) => pools.reduce((sum, p) => sum + p.count(theme), 0),
+  };
+}
+
 const cache = new Map<Circle123, Promise<PuzzlePool>>();
 
 /** Загружает круг один раз; параллельные вызовы делят один запрос. */
