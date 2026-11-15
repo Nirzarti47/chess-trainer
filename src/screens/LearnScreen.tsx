@@ -103,6 +103,8 @@ export function LearnScreen() {
   const { settings } = useSettings();
   const [data, setData] = useState<LearnData | null>(null);
   const [failed, setFailed] = useState(false);
+  /** «Повторить» увеличивает номер попытки, и данные читаются заново. */
+  const [attempt, setAttempt] = useState(0);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,7 +115,11 @@ export function LearnScreen() {
   useEffect(() => {
     let alive = true;
     const load = () => loadLearn().then(
-      (d) => { if (alive) setData(d); },
+      (d) => {
+        if (!alive) return;
+        setData(d);
+        setFailed(false);
+      },
       (e: unknown) => {
         console.error('Не удалось загрузить путь', e);
         if (alive) setFailed(true);
@@ -126,7 +132,7 @@ export function LearnScreen() {
       alive = false;
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, []);
+  }, [attempt]);
 
   useEffect(() => {
     if (!data || scrolled.current) return;
@@ -166,6 +172,7 @@ export function LearnScreen() {
     return (
       <section className="learn learn-message">
         <p>Не удалось загрузить путь</p>
+        <BigButton onClick={() => setAttempt((n) => n + 1)}>Повторить</BigButton>
       </section>
     );
   }

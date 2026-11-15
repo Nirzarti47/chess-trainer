@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from './db';
 import {
   clearActiveLesson, completeLesson, declineFastTrack, getActiveDays, getDay, getDueReviews, getLessonProgress,
-  getProfile, getRatingHistory, getSeenPuzzleIds, getSettings, getThemeStats, loadActiveLesson,
+  getProfile, getRatingHistory, getSeenPuzzleIds, getSettings, getSolvedPuzzleCount, getThemeStats, loadActiveLesson,
   markBackupDone, recordTaskResult, saveActiveLesson, saveSettings, snoozeBackup, type ActiveLesson,
 } from './repo';
 import { XP } from '../domain/xp';
@@ -25,6 +25,12 @@ describe('профиль и настройки', () => {
   it('новый профиль: рейтинг 600, firstDay — сегодня', async () => {
     const p = await getProfile(NOW);
     expect(p).toEqual({ rating: 600, ratedCount: 0, xp: 0, firstDay: '2026-11-14',
+      lastBackupAt: null, backupSnoozedAt: null, fastTrackDeclined: [] });
+  });
+
+  it('поля, которых нет в сохранённом профиле, берутся по умолчанию', async () => {
+    await db.kv.put({ key: 'profile', value: { rating: 750, ratedCount: 3, xp: 40, firstDay: '2026-11-01' } });
+    expect(await getProfile(NOW)).toEqual({ rating: 750, ratedCount: 3, xp: 40, firstDay: '2026-11-01',
       lastBackupAt: null, backupSnoozedAt: null, fastTrackDeclined: [] });
   });
 
@@ -106,6 +112,19 @@ describe('recordTaskResult', () => {
     expect(await getDueReviews('2030-01-01')).toEqual([{ puzzleId: 'p1', stage: 3, dueDay: '2026-12-16' }]);
     await recordTaskResult(task({ rated: false, source: 'review', now: new Date(2026, 11, 16, 12) }));
     expect(await getDueReviews('2030-01-01')).toEqual([]);
+  });
+
+  it('getSolvedPuzzleCount — разные задачи, решённые хотя бы раз без ошибки и подсказки', async () => {
+    const add = (puzzleId: string | undefined, result: TaskResult) =>
+      db.attempts.add({ puzzleId, themes: [], result, source: 'free', rated: false, at: 1 });
+    await add('a', 'mistake');
+    await add('a', 'clean');
+    await add('a', 'clean');
+    await add('b', 'hint');
+    await add('c', 'mistake');
+    await add(undefined, 'clean');
+    await add('d', 'clean');
+    expect(await getSolvedPuzzleCount()).toBe(2);
   });
 
   it('getSeenPuzzleIds — задачи, у которых есть попытка', async () => {

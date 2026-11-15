@@ -6,6 +6,7 @@ import { LearnScreen } from './screens/LearnScreen';
 import { LessonScreen, WeakSpotsScreen } from './screens/LessonScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { PuzzleRunScreen, PuzzlesScreen } from './screens/PuzzlesScreen';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import { SettingsProvider } from './ui/settings';
 import { TabBar } from './ui/TabBar';
 
@@ -45,10 +46,12 @@ function Layout() {
 
 export default function App() {
   return (
-    <SettingsProvider>
-      <HashRouter>
-        <Layout />
-      </HashRouter>
-    </SettingsProvider>
+    <ErrorBoundary>
+      <SettingsProvider>
+        <HashRouter>
+          <Layout />
+        </HashRouter>
+      </SettingsProvider>
+    </ErrorBoundary>
   );
 }

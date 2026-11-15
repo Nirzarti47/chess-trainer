@@ -14,6 +14,8 @@ beforeEach(async () => {
 
 const NOW = new Date(2026, 10, 14, 12, 0);
 
+type Tables = Record<string, Record<string, unknown>[]>;
+
 async function fillState() {
   await getProfile(NOW);
   await saveSettings({ board: 'wood', pieceSet: 'cburnett' });
@@ -82,6 +84,38 @@ describe('резервная копия', () => {
     await expect(importBackup(text)).rejects.toThrow(new BackupError(message));
     await expect(importBackup(text)).rejects.toBeInstanceOf(BackupError);
     expect(await getProfile()).toEqual(before);
+  });
+
+  it.each([
+    ['запись попытки без числового id', (t: Tables) => { t.attempts = [{ ...t.attempts[0], id: 'x' }]; }],
+    ['повторение без puzzleId', (t: Tables) => { t.reviews = [{ stage: 0, dueDay: '2026-11-15' }]; }],
+    ['урок с номером строкой', (t: Tables) => { t.lessons = [{ nodeId: 'n1', lessonIndex: '0', clean: 1, total: 1 }]; }],
+    ['день без ключа', (t: Tables) => { t.days = [{ lessons: 1, freePuzzles: 0 }]; }],
+    ['строка kv без ключа', (t: Tables) => { t.kv = [...t.kv, { value: 1 }]; }],
+    ['рейтинг профиля не число', (t: Tables) => {
+      t.kv = t.kv.map((r) => (r.key === 'profile' ? { ...r, value: { ...(r.value as object), rating: 'много' } } : r));
+    }],
+    ['опыт профиля null', (t: Tables) => {
+      t.kv = t.kv.map((r) => (r.key === 'profile' ? { ...r, value: { ...(r.value as object), xp: null } } : r));
+    }],
+  ])('испорченная форма строк (%s) — файл отвергается целиком', async (_name, spoil) => {
+    await fillState();
+    const before = await snapshot();
+    const good = JSON.parse(await (await exportBackup()).text());
+    spoil(good.tables);
+    await expect(importBackup(JSON.stringify(good))).rejects.toThrow(new BackupError('Файл повреждён'));
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('сбой записи (не разбора) — «Не удалось записать данные»', async () => {
+    await fillState();
+    const text = await (await exportBackup()).text();
+    db.close();
+    try {
+      await expect(importBackup(text)).rejects.toThrow(new BackupError('Не удалось записать данные'));
+    } finally {
+      await db.open();
+    }
   });
 
   it('ошибка при записи откатывает импорт целиком', async () => {

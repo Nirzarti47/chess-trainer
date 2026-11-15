@@ -1,4 +1,7 @@
-import { NavLink } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { getProfile } from '../data/repo';
+import { backupReminderDue } from '../domain/backupReminder';
 
 const TABS = [
   {
@@ -34,14 +37,41 @@ const TABS = [
   },
 ];
 
+/** Пора ли напомнить о резервной копии; читается заново при каждом переходе и возвращении в приложение. */
+function useBackupDue(): boolean {
+  const { pathname } = useLocation();
+  const [due, setDue] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const check = () => getProfile().then(
+      (p) => { if (alive) setDue(backupReminderDue(p, new Date())); },
+      () => undefined,
+    );
+    const onVisible = () => { if (document.visibilityState === 'visible') void check(); };
+    void check();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [pathname]);
+  return due;
+}
+
 export function TabBar() {
+  const backupDue = useBackupDue();
   return (
     <nav className="tabbar">
       {TABS.map((tab) => (
         <NavLink key={tab.to} to={tab.to}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            {tab.icon}
-          </svg>
+          <span className="tabbar-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {tab.icon}
+            </svg>
+            {tab.to === '/profile' && backupDue && (
+              <span className="tabbar-dot" role="img" aria-label="Пора сделать резервную копию" />
+            )}
+          </span>
           {tab.label}
         </NavLink>
       ))}

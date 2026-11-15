@@ -28,15 +28,18 @@ async function writeKv(key: string, value: unknown): Promise<void> {
   await db.kv.put({ key, value });
 }
 
-/** Профиль создаётся при первом обращении; firstDay — день этого обращения. */
+const defaultProfile = (now: Date): Profile => ({
+  rating: START_RATING, ratedCount: 0, xp: 0, firstDay: localDay(now),
+  lastBackupAt: null, backupSnoozedAt: null, fastTrackDeclined: [],
+});
+
+/** Профиль создаётся при первом обращении; firstDay — день этого обращения.
+ *  Поля, которых нет в сохранённом профиле (добавленные в новых версиях), берутся по умолчанию. */
 export async function getProfile(now: Date = new Date()): Promise<Profile> {
   return db.transaction('rw', db.kv, async () => {
-    const existing = await readKv<Profile>(PROFILE);
-    if (existing) return existing;
-    const profile: Profile = {
-      rating: START_RATING, ratedCount: 0, xp: 0, firstDay: localDay(now),
-      lastBackupAt: null, backupSnoozedAt: null, fastTrackDeclined: [],
-    };
+    const existing = await readKv<Partial<Profile>>(PROFILE);
+    if (existing) return { ...defaultProfile(now), ...existing };
+    const profile = defaultProfile(now);
     await writeKv(PROFILE, profile);
     return profile;
   });
@@ -133,6 +136,15 @@ export async function getDueReviews(today: string): Promise<ReviewItem[]> {
 /** Убирает записи повторения (например, тех задач, которых больше нет в базе). */
 export async function deleteReviews(puzzleIds: string[]): Promise<void> {
   if (puzzleIds.length > 0) await db.reviews.bulkDelete(puzzleIds);
+}
+
+/** Сколько разных задач решено хотя бы раз без ошибки и подсказки. */
+export async function getSolvedPuzzleCount(): Promise<number> {
+  const ids = new Set<string>();
+  await db.attempts.each((a) => {
+    if (a.result === 'clean' && a.puzzleId !== undefined) ids.add(a.puzzleId);
+  });
+  return ids.size;
 }
 
 /** Задачи, у которых есть хотя бы одна записанная попытка. */

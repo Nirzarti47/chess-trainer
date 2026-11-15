@@ -9,7 +9,7 @@ import { addDays, localDay } from '../domain/dates';
 import type { Profile } from '../domain/types';
 import { AboutScreen } from './AboutScreen';
 import { BackupScreen, RELOAD_DELAY_MS } from './BackupScreen';
-import { ProfileScreen } from './ProfileScreen';
+import { CHART_POINTS, ProfileScreen, thinPoints } from './ProfileScreen';
 
 function Where() {
   const { pathname } = useLocation();
@@ -90,6 +90,8 @@ describe('ProfileScreen: прогресс', () => {
       { puzzleId: 'a', themes: ['fork'], result: 'clean', source: 'free', rated: true, at: 1 },
       { puzzleId: 'a', themes: ['fork'], result: 'clean', source: 'free', rated: true, at: 2 },
       { puzzleId: 'b', themes: ['fork'], result: 'clean', source: 'free', rated: true, at: 3 },
+      // Задача с одной ошибкой не решена.
+      { puzzleId: 'c', themes: ['fork'], result: 'mistake', source: 'free', rated: true, at: 4 },
     ]);
     await db.themeStats.bulkPut([
       { theme: 'fork', rating: 900, solved: 12, clean: 10 },
@@ -127,6 +129,48 @@ describe('ProfileScreen: прогресс', () => {
     renderAt('/profile');
     await waitFor(() => expect(screen.getByLabelText('Пройдено тем').textContent).toBe('1'));
     expect(screen.getByLabelText('Пройдено уроков').textContent).toBe('9');
+  });
+});
+
+describe('ProfileScreen: устойчивость', () => {
+  it('график прореживает длинную историю и считает границы без разворота массива', async () => {
+    const long = Array.from({ length: 70_000 }, (_, i) => 600 + (i % 300));
+    const thin = thinPoints(long);
+    expect(thin).toHaveLength(CHART_POINTS);
+    expect(thin[0]).toBe(long[0]);
+    expect(thin[thin.length - 1]).toBe(long[long.length - 1]);
+    expect(thinPoints([1, 2, 3])).toEqual([1, 2, 3]);
+
+    // В базу — история покороче: запись 70 тысяч строк в тестовую базу слишком долгая.
+    await db.ratingHistory.bulkAdd(long.slice(0, 1000).map((rating, at) => ({ at, rating })));
+    renderAt('/profile');
+    const chart = await screen.findByRole('img', { name: 'График рейтинга' });
+    expect(chart.querySelector('polyline')!.getAttribute('points')!.split(' ')).toHaveLength(CHART_POINTS);
+  });
+
+  it('ошибка чтения: «Повторить» и меню видны, после удачной загрузки ошибка уходит', async () => {
+    await getProfile();
+    db.close();
+    renderAt('/profile');
+    expect(await screen.findByText('Не удалось загрузить профиль')).toBeTruthy();
+    for (const name of ['Оформление', 'Резервная копия', 'О приложении']) {
+      expect(screen.getByRole('link', { name: new RegExp(name) })).toBeTruthy();
+    }
+    await db.open();
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+    expect(await screen.findByLabelText('Опыт')).toBeTruthy();
+    expect(screen.queryByText('Не удалось загрузить профиль')).toBeNull();
+  });
+
+  it('ошибка уходит и после загрузки при возвращении в приложение', async () => {
+    await getProfile();
+    db.close();
+    renderAt('/profile');
+    expect(await screen.findByText('Не удалось загрузить профиль')).toBeTruthy();
+    await db.open();
+    fireEvent(document, new Event('visibilitychange'));
+    expect(await screen.findByLabelText('Опыт')).toBeTruthy();
+    expect(screen.queryByText('Не удалось загрузить профиль')).toBeNull();
   });
 });
 
@@ -307,6 +351,8 @@ describe('BackupScreen: восстановление', () => {
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Заменить' }));
     expect(await screen.findByText('Прогресс восстановлен')).toBeTruthy();
     expect((await getProfile()).xp).toBe(50);
+    // В файле lastBackupAt: null, но восстановленное состояние и есть содержимое копии.
+    await waitFor(async () => expect((await getProfile()).lastBackupAt).not.toBeNull());
     await waitFor(() => expect(reload).toHaveBeenCalledTimes(1), { timeout: RELOAD_DELAY_MS + 1000 });
   });
 

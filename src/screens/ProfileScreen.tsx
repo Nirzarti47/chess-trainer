@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { THEMES } from '../content/themes';
 import {
-  getActiveDays, getLessonProgress, getProfile, getRatingHistory, getSeenPuzzleIds, getThemeStats, snoozeBackup,
+  getActiveDays, getLessonProgress, getProfile, getRatingHistory, getSolvedPuzzleCount, getThemeStats, snoozeBackup,
 } from '../data/repo';
 import { backupReminderDue } from '../domain/backupReminder';
 import { localDay } from '../domain/dates';
@@ -16,6 +16,8 @@ import './ProfileScreen.css';
 /** Тема попадает в сильные и слабые, когда решено не меньше стольких задач. */
 export const THEME_MIN_SOLVED = 5;
 const THEMES_SHOWN = 3;
+/** Больше точек график не рисует: длинная история прореживается. */
+export const CHART_POINTS = 250;
 
 const WEEKDAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
 const STATE_TEXT: Record<string, string> = {
@@ -30,8 +32,8 @@ interface ProfileData {
 
 async function loadProfile(): Promise<ProfileData> {
   const now = new Date();
-  const [profile, stats, progress, days, seen, history] = await Promise.all([
-    getProfile(), getThemeStats(), getLessonProgress(), getActiveDays(), getSeenPuzzleIds(), getRatingHistory(),
+  const [profile, stats, progress, days, solved, history] = await Promise.all([
+    getProfile(), getThemeStats(), getLessonProgress(), getActiveDays(), getSolvedPuzzleCount(), getRatingHistory(),
   ]);
   const path = buildPath(progress, stats, profile.fastTrackDeclined, 0);
   const themesDone = path.sections.flatMap((s) => s.items)
@@ -47,7 +49,7 @@ async function loadProfile(): Promise<ProfileData> {
     history: history.map((h) => h.rating),
     themesDone,
     lessonsDone: progress.length,
-    puzzlesSolved: seen.size,
+    puzzlesSolved: solved,
     strong,
     weak,
     reminder: backupReminderDue(profile, now),
@@ -56,10 +58,23 @@ async function loadProfile(): Promise<ProfileData> {
 
 const themeTitle = (id: string) => THEMES.find((t) => t.id === id)?.title ?? id;
 
-function RatingChart({ points }: { points: number[] }) {
-  if (points.length < 2) return <p className="profile-hint">График появится после первых задач</p>;
+/** Не больше limit точек через равные промежутки; первая и последняя сохраняются. */
+export function thinPoints(points: number[], limit = CHART_POINTS): number[] {
+  if (points.length <= limit) return points;
+  const step = (points.length - 1) / (limit - 1);
+  return Array.from({ length: limit }, (_, i) => points[Math.round(i * step)]);
+}
+
+function RatingChart({ points: all }: { points: number[] }) {
+  if (all.length < 2) return <p className="profile-hint">График появится после первых задач</p>;
+  const points = thinPoints(all);
   const W = 300, H = 64, PAD = 4;
-  const min = Math.min(...points), max = Math.max(...points);
+  // Циклом, а не Math.min(...points): разворот длинного массива в Safari бросает исключение.
+  let min = points[0], max = points[0];
+  for (const r of points) {
+    if (r < min) min = r;
+    if (r > max) max = r;
+  }
   const y = (r: number) => (max === min ? H / 2 : PAD + ((max - r) / (max - min)) * (H - 2 * PAD));
   const coords = points.map((r, i) => `${((i / (points.length - 1)) * W).toFixed(1)},${y(r).toFixed(1)}`);
   return (
@@ -93,17 +108,33 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
+function ProfileMenu() {
+  return (
+    <nav className="profile-menu" aria-label="Настройки">
+      <Link to="/profile/appearance">Оформление<span aria-hidden="true">›</span></Link>
+      <Link to="/profile/backup">Резервная копия<span aria-hidden="true">›</span></Link>
+      <Link to="/profile/about">О приложении<span aria-hidden="true">›</span></Link>
+    </nav>
+  );
+}
+
 /** Экран «Профиль»: серия, опыт, рейтинг, темы и вход в настройки. */
 export function ProfileScreen() {
   const navigate = useNavigate();
   const [data, setData] = useState<ProfileData | null>(null);
   const [failed, setFailed] = useState(false);
+  /** «Повторить» увеличивает номер попытки, и данные читаются заново. */
+  const [attempt, setAttempt] = useState(0);
 
   // Данные читаются заново при каждом показе экрана и при возвращении в приложение.
   useEffect(() => {
     let alive = true;
     const load = () => loadProfile().then(
-      (d) => { if (alive) setData(d); },
+      (d) => {
+        if (!alive) return;
+        setData(d);
+        setFailed(false);
+      },
       (e: unknown) => {
         console.error('Не удалось загрузить профиль', e);
         if (alive) setFailed(true);
@@ -116,7 +147,7 @@ export function ProfileScreen() {
       alive = false;
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, []);
+  }, [attempt]);
 
   async function later() {
     setData((d) => d && { ...d, reminder: false });
@@ -127,10 +158,16 @@ export function ProfileScreen() {
     }
   }
 
+  // Меню рисуется и при ошибке: через него восстанавливают резервную копию.
   if (failed) {
     return (
       <section className="profile">
-        <p className="profile-hint">Не удалось загрузить профиль</p>
+        <header className="profile-head"><h1>Профиль</h1></header>
+        <div className="profile-card">
+          <p className="profile-hint">Не удалось загрузить профиль</p>
+          <BigButton onClick={() => setAttempt((n) => n + 1)}>Повторить</BigButton>
+        </div>
+        <ProfileMenu />
       </section>
     );
   }
@@ -191,11 +228,7 @@ export function ProfileScreen() {
           </>
         )}
 
-      <nav className="profile-menu" aria-label="Настройки">
-        <Link to="/profile/appearance">Оформление<span aria-hidden="true">›</span></Link>
-        <Link to="/profile/backup">Резервная копия<span aria-hidden="true">›</span></Link>
-        <Link to="/profile/about">О приложении<span aria-hidden="true">›</span></Link>
-      </nav>
+      <ProfileMenu />
     </section>
   );
 }

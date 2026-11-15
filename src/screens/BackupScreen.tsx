@@ -20,7 +20,8 @@ function download(file: File): void {
   a.href = url;
   a.download = file.name;
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  // Сразу отзывать нельзя: браузер может ещё не начать скачивание.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 /** Отдаёт файл через системное меню «Поделиться» (iPhone), иначе скачивает.
@@ -114,6 +115,8 @@ export function BackupScreen({ reload = () => window.location.reload() }: { relo
     setBusy(true);
     try {
       await importBackup(await file.text());
+      // Восстановленное состояние и есть содержимое файла: напоминание о копии считается от сейчас.
+      await markBackupDone(new Date()).catch((e: unknown) => console.error('Не удалось отметить копию', e));
       setStatus({ kind: 'ok', text: 'Прогресс восстановлен' });
       // Перезагрузка — чтобы все экраны и настройки прочитали восстановленные данные.
       setTimeout(reload, RELOAD_DELAY_MS);

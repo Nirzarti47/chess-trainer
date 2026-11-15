@@ -49,6 +49,30 @@ beforeEach(async () => {
   Element.prototype.scrollIntoView = function (this: Element) { scrolled(this); };
 });
 
+describe('LearnScreen: ошибка чтения', () => {
+  it('«Повторить» загружает путь заново, ошибка уходит', async () => {
+    await getProfile();
+    db.close();
+    renderLearn();
+    expect(await screen.findByText('Не удалось загрузить путь')).toBeTruthy();
+    await db.open();
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+    expect(await node(/^Проверка основ/)).toBeTruthy();
+    expect(screen.queryByText('Не удалось загрузить путь')).toBeNull();
+  });
+
+  it('ошибка уходит после удачной загрузки при возвращении в приложение', async () => {
+    await getProfile();
+    db.close();
+    renderLearn();
+    expect(await screen.findByText('Не удалось загрузить путь')).toBeTruthy();
+    await db.open();
+    fireEvent(document, new Event('visibilitychange'));
+    expect(await node(/^Проверка основ/)).toBeTruthy();
+    expect(screen.queryByText('Не удалось загрузить путь')).toBeNull();
+  });
+});
+
 describe('LearnScreen', () => {
   it('новый пользователь: раздел «Проверка основ» с текущим узлом, без «Слабых мест»', async () => {
     renderLearn();
