@@ -11,6 +11,7 @@ import { buildPath } from '../domain/path';
 import { START_RATING } from '../domain/rating';
 import { weakestThemes } from '../domain/themeStats';
 import type { LessonTask, Puzzle, ThemeId, ThemeStat } from '../domain/types';
+import { labelled, LessonNotFoundError } from './lessonErrors';
 import type { Lesson } from './LessonScreen';
 import { loadOpenPool, openBand, openThemesOf } from './openThemes';
 
@@ -36,7 +37,8 @@ function themesBefore(node: PathNode): ThemeId[] {
 async function themeLesson(node: PathNode, mode: 'full' | 'reminder', title: string): Promise<Lesson> {
   const themeId = node.themeId!;
   const [pool, stats, seen, profile] = await Promise.all([
-    loadCircle(node.circle as Circle123), getThemeStats(), getSeenPuzzleIds(), getProfile(),
+    labelled('файл задач', loadCircle(node.circle as Circle123)), labelled('статистика тем', getThemeStats()),
+    labelled('решённые задачи', getSeenPuzzleIds()), labelled('профиль', getProfile()),
   ]);
   const ratings = ratingsOf(stats);
   const puzzles = buildThemeLesson({
@@ -96,7 +98,7 @@ export async function lessonFactory(nodeId: string, lessonIndex: number): Promis
   const reinforce = nodeId.endsWith(REINFORCE_SUFFIX);
   const id = reinforce ? nodeId.slice(0, -REINFORCE_SUFFIX.length) : nodeId;
   const node = ALL_NODES.find((n) => n.id === id);
-  if (!node || (reinforce && node.kind !== 'theme')) throw new Error(`Урок ${nodeId} не найден`);
+  if (!node || (reinforce && node.kind !== 'theme')) throw new LessonNotFoundError(`Урок ${nodeId} не найден`);
 
   if (reinforce) return themeLesson(node, 'reminder', `Закрепление: ${node.title}`);
   switch (node.kind) {

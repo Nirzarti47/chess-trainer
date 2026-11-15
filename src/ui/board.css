@@ -1,10 +1,14 @@
-/* Доска на всю ширину контейнера, квадратная, без координат.
+/* Доска на всю ширину контейнера, квадратная, с буквами и цифрами по левому и нижнему краю.
    Цвета приходят переменными из блока стилей настроек (boardTheme.ts); здесь — значения «Ночной» на случай,
    если доска показана вне SettingsProvider. */
 .board {
+  /* Поле слева и снизу под цифры и буквы. */
+  --coord-gutter: 15px;
   position: relative;
+  box-sizing: border-box;
   width: 100%;
   aspect-ratio: 1;
+  padding: 0 0 var(--coord-gutter) var(--coord-gutter);
 }
 
 .board .board-cg {
@@ -39,6 +43,53 @@
 
 .board cg-board square.move-dest.oc {
   background: radial-gradient(transparent 78%, rgba(12, 24, 33, 0.32) 80%);
+}
+
+/* Буквы и цифры стоят за краем доски (цифры слева, буквы снизу), чтобы их не закрывали фигуры. */
+.board .cg-wrap coords {
+  position: absolute;
+  display: flex;
+  pointer-events: none;
+  opacity: 1;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--muted);
+  text-transform: none;
+}
+
+.board .cg-wrap coords coord {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  transform: none;
+}
+
+.board .cg-wrap coords.ranks {
+  top: 0;
+  left: calc(-1 * var(--coord-gutter));
+  width: var(--coord-gutter);
+  height: 100%;
+  flex-flow: column-reverse;
+}
+
+.board .cg-wrap coords.ranks.black {
+  flex-flow: column;
+}
+
+.board .cg-wrap coords.files {
+  top: 100%;
+  bottom: auto;
+  left: 0;
+  width: 100%;
+  height: var(--coord-gutter);
+  flex-flow: row;
+}
+
+.board .cg-wrap coords.files.black {
+  flex-flow: row-reverse;
 }
 
 /* Выбор фигуры при превращении пешки */

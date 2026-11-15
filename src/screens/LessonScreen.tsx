@@ -11,6 +11,7 @@ import { XP } from '../domain/xp';
 import { BigButton } from '../ui/BigButton';
 import { ProgressBar } from '../ui/ProgressBar';
 import { Sheet } from '../ui/Sheet';
+import { describeError, LessonNotFoundError } from './lessonErrors';
 import { lessonFactory as realLessonFactory } from './lessonFactory';
 import { LessonSummary, type LessonSummaryData } from './LessonSummary';
 import { TaskRunner, type BestReply } from './TaskRunner';
@@ -132,6 +133,8 @@ export function LessonRun({ tasks, source, title, onFinish, onExit, resumeKey, r
 type Phase =
   | { kind: 'loading' }
   | { kind: 'missing' }
+  /** Урок есть, но открыть его не вышло; detail — текст сбоя для диагностики. */
+  | { kind: 'failed'; detail: string }
   /** route — адрес урока, для которого загружен этот ход (`${nodeId}/${lessonIndex}`). */
   | { kind: 'run'; route: string; lesson: Lesson; resume: RunProgress }
   | { kind: 'summary'; summary: LessonSummaryData; advice: boolean };
@@ -153,6 +156,8 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
   const lessonIndex = lessonIndexProp ?? Number(params.lessonIndex);
   const route = `${nodeId}/${lessonIndex}`;
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
+  // Растёт по кнопке «Повторить»: загрузка урока запускается заново.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     // Холодный запуск движка дольше его таймаута: прогреваем заранее, чтобы первая ошибка показала ответ.
@@ -165,23 +170,26 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
     // Новый адрес — новый урок: прежний не остаётся на экране, пока грузится следующий.
     setPhase({ kind: 'loading' });
     (async () => {
-      if (!nodeId || !Number.isInteger(lessonIndex)) throw new Error('Неверный адрес урока');
+      if (!nodeId || !Number.isInteger(lessonIndex)) throw new LessonNotFoundError('Неверный адрес урока');
       const saved = (await loadActiveLesson().catch(() => null)) as SavedLesson | null;
       if (canResume(saved, nodeId, lessonIndex)) {
         const { title, source, tasks, cursor, results, retry } = saved;
         return { lesson: { title, source, tasks }, resume: { cursor, results, retry } };
       }
       const lesson = await factory(nodeId, lessonIndex);
-      if (lesson.tasks.length === 0) throw new Error('В уроке нет заданий');
+      if (lesson.tasks.length === 0) throw new LessonNotFoundError('В уроке нет заданий');
       return { lesson, resume: FRESH };
     })().then(
       ({ lesson, resume }) => { if (alive) setPhase({ kind: 'run', route, lesson, resume }); },
-      () => { if (alive) setPhase({ kind: 'missing' }); },
+      (e: unknown) => {
+        if (!alive) return;
+        setPhase(e instanceof LessonNotFoundError ? { kind: 'missing' } : { kind: 'failed', detail: describeError(e) });
+      },
     );
     return () => {
       alive = false;
     };
-  }, [nodeId, lessonIndex, route, factory]);
+  }, [nodeId, lessonIndex, route, factory, attempt]);
 
   const toLearn = () => navigate('/learn');
 
@@ -205,6 +213,15 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
         <section className="lesson lesson-message">
           <h1>Урок не найден</h1>
           <BigButton onClick={toLearn}>К урокам</BigButton>
+        </section>
+      );
+    case 'failed':
+      return (
+        <section className="lesson lesson-message">
+          <h1>Не удалось открыть урок</h1>
+          <p className="lesson-error-detail">{shown.detail}</p>
+          <BigButton onClick={() => setAttempt((n) => n + 1)}>Повторить</BigButton>
+          <BigButton variant="surface" onClick={toLearn}>К урокам</BigButton>
         </section>
       );
     case 'run':

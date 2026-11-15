@@ -86,7 +86,7 @@ export function Board({ fen, orientation, dests, lastMove, highlight = [], arrow
       fen: init.fen,
       orientation: init.orientation,
       turnColor: turn,
-      coordinates: false,
+      coordinates: true,
       highlight: { lastMove: false, check: false, custom: squareClasses(init.lastMove, init.highlight) },
       movable: {
         color: init.interactive ? turn : undefined,

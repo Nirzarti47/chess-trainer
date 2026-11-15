@@ -7,6 +7,7 @@ import { getProfile, loadActiveLesson } from '../data/repo';
 import { localDay } from '../domain/dates';
 import type { LessonTask, Puzzle, Source } from '../domain/types';
 import type { BoardProps } from '../ui/Board';
+import { LessonNotFoundError } from './lessonErrors';
 import { LessonScreen } from './LessonScreen';
 
 // Настоящая доска проверена в Board.test.tsx; здесь поддельная: запоминает свойства и даёт сделать ход.
@@ -415,7 +416,7 @@ describe('LessonScreen', () => {
 
   it('смена адреса, а новый урок не загрузился: прежний урок не сохраняется под новым адресом', async () => {
     const factory = vi.fn(async (nodeId: string, _lessonIndex: number) => {
-      if (nodeId !== 'c1:fork') throw new Error('нет такого');
+      if (nodeId !== 'c1:fork') throw new LessonNotFoundError();
       return { title: 'Вилка', source: 'lesson' as Source, tasks: [pz('p1'), pz('p2', P2_MOVES)] };
     });
     renderLesson({ factory, goTo: '/lesson/c1:pin/0' });
@@ -452,8 +453,24 @@ describe('LessonScreen', () => {
       { nodeId: 'c1:pin', lessonIndex: 0, clean: 2, total: 2 }));
   });
 
+  it('сбой загрузки урока: текст ошибки на экране и «Повторить»', async () => {
+    let calls = 0;
+    const factory = vi.fn(async (_nodeId: string, _lessonIndex: number) => {
+      calls += 1;
+      if (calls === 1) throw new TypeError('Load failed');
+      return { title: 'Вилка', source: 'lesson' as Source, tasks: [pz('p1')] };
+    });
+    renderLesson({ factory });
+    expect(await screen.findByRole('heading', { name: 'Не удалось открыть урок' })).toBeTruthy();
+    expect(screen.getByText('TypeError: Load failed')).toBeTruthy();
+    expect(screen.queryByText('Урок не найден')).toBeNull();
+    await click('Повторить');
+    await waitInteractive(P1);
+    expect(factory).toHaveBeenCalledTimes(2);
+  });
+
   it('неизвестный урок: «Урок не найден» и кнопка назад', async () => {
-    const factory = vi.fn(async () => { throw new Error('нет такого'); });
+    const factory = vi.fn(async () => { throw new LessonNotFoundError(); });
     renderLesson({ factory: factory as unknown as ReturnType<typeof lesson> });
     expect(await screen.findByText('Урок не найден')).toBeTruthy();
     await click('К урокам');
