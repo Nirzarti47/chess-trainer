@@ -31,7 +31,8 @@ const FRESH: RunProgress = { cursor: 0, results: [], retry: [] };
 function summarize(tasks: LessonTask[], p: RunProgress): LessonSummaryData {
   const total = tasks.filter((t) => t.kind !== 'explain').length;
   const clean = p.results.slice(0, tasks.length).filter((r) => r === 'clean').length;
-  const xp = p.results.reduce<number>((sum, r) => sum + (r === null ? 0 : r === 'clean' ? XP.clean : XP.other), XP.lesson);
+  // Опыт — только за первые показы: возврат задачи в конце урока не записывается.
+  const xp = p.results.slice(0, tasks.length).reduce<number>((sum, r) => sum + (r === null ? 0 : r === 'clean' ? XP.clean : XP.other), XP.lesson);
   return { clean, total, xp };
 }
 
@@ -85,12 +86,13 @@ export function LessonRun({ tasks, source, title, onFinish, onExit, resumeKey, r
 
     const now = new Date();
     void queue(async () => {
-      if (task.kind === 'puzzle') {
+      // Возврат задачи в конце урока — часть урока, а не повторение: не двигает интервал и не даёт опыт.
+      if (first && task.kind === 'puzzle') {
         const { puzzle } = task;
-        const rated = first && source !== 'review' && !(await seen).has(puzzle.id);
+        const rated = source !== 'review' && !(await seen).has(puzzle.id);
         await recordTaskResult({ puzzleId: puzzle.id, themes: puzzle.themes, puzzleRating: puzzle.rating,
           result, source, rated, now });
-      } else if (recorded !== null) {
+      } else if (first && recorded !== null) {
         await recordTaskResult({ themes: [], result, source, rated: false, now });
       }
       await persist(next);

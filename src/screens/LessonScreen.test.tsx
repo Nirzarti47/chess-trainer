@@ -3,7 +3,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { Chess } from 'chess.js';
 import { db } from '../data/db';
-import { loadActiveLesson } from '../data/repo';
+import { getProfile, loadActiveLesson } from '../data/repo';
+import { localDay } from '../domain/dates';
 import type { LessonTask, Puzzle, Source } from '../domain/types';
 import type { BoardProps } from '../ui/Board';
 import { LessonScreen } from './LessonScreen';
@@ -141,7 +142,7 @@ describe('LessonScreen', () => {
     expect(await screen.findByRole('heading', { name: 'Учёба' })).toBeTruthy();
   });
 
-  it('ошибка во второй задаче: она возвращается после третьей и второй раз не идёт в рейтинг', async () => {
+  it('ошибка во второй задаче: она возвращается после третьей, возврат не записывается', async () => {
     renderLesson({ factory: lesson([pz('p1'), pz('p2', P2_MOVES), pz('p3')]) });
     await solve('e7e5', P1);
 
@@ -155,14 +156,32 @@ describe('LessonScreen', () => {
     await solve('d7d5', P2);
 
     expect(await screen.findByText('Решено с первого раза: 2 из 3')).toBeTruthy();
-    expect(screen.getByText('Опыт: +55')).toBeTruthy();
+    expect(screen.getByText('Опыт: +45')).toBeTruthy();
     await waitFor(async () => expect(await db.lessons.count()).toBe(1));
     expect(await attempts()).toEqual([
       { puzzleId: 'p1', result: 'clean', rated: true, source: 'lesson' },
       { puzzleId: 'p2', result: 'mistake', rated: true, source: 'lesson' },
       { puzzleId: 'p3', result: 'clean', rated: true, source: 'lesson' },
-      { puzzleId: 'p2', result: 'clean', rated: false, source: 'lesson' },
     ]);
+  });
+
+  it('ошибка и чистый повтор в конце урока: повторение завтра на ступени 0, опыт за задачу 5', async () => {
+    renderLesson({ factory: lesson([pz('p1')]) });
+    await waitInteractive(P1);
+    move('a7a6');
+    await solve('e7e5', P1);
+    await solve('e7e5', P1);
+
+    expect(await screen.findByText('Решено с первого раза: 0 из 1')).toBeTruthy();
+    expect(screen.getByText('Опыт: +25')).toBeTruthy();
+    await waitFor(async () => expect(await loadActiveLesson()).toBeNull());
+    const [review] = await db.reviews.toArray();
+    expect(review.stage).toBe(0);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    expect(review.dueDay).toBe(localDay(tomorrow));
+    expect((await getProfile()).xp).toBe(25);
+    expect((await attempts()).map((a) => a.result)).toEqual(['mistake']);
   });
 
   it('задача, которая уже встречалась, и задачи закрепления не идут в рейтинг', async () => {
@@ -211,7 +230,7 @@ describe('LessonScreen', () => {
     await solve('e7e5', P1);
     expect(await screen.findByText('Решено с первого раза: 0 из 1')).toBeTruthy();
     await waitFor(async () => expect(await db.lessons.count()).toBe(1));
-    expect((await attempts()).map((a) => a.result)).toEqual(['mistake', 'clean']);
+    expect((await attempts()).map((a) => a.result)).toEqual(['mistake']);
   });
 
   it('подсказка: сначала клетка фигуры, потом ход стрелкой; результат — hint', async () => {
@@ -225,7 +244,7 @@ describe('LessonScreen', () => {
     await solve('e7e5', P1);
     await screen.findByText('Решено с первого раза: 0 из 1');
     await waitFor(async () => expect(await db.lessons.count()).toBe(1));
-    expect((await attempts()).map((a) => a.result)).toEqual(['hint', 'clean']);
+    expect((await attempts()).map((a) => a.result)).toEqual(['hint']);
   });
 
   it('закрытие и повторное открытие продолжает урок с того же задания', async () => {
@@ -294,7 +313,7 @@ describe('LessonScreen', () => {
     await click('Дальше');
     expect(await screen.findByText('Решено с первого раза: 0 из 1')).toBeTruthy();
     await waitFor(async () => expect(await db.lessons.count()).toBe(1));
-    expect((await attempts()).map((a) => a.result)).toEqual(['mistake', 'clean']);
+    expect((await attempts()).map((a) => a.result)).toEqual(['mistake']);
   });
 
   it('authored: неверный ход — mistake без рейтинга и объяснение', async () => {
@@ -317,7 +336,6 @@ describe('LessonScreen', () => {
     await waitFor(async () => expect(await db.lessons.count()).toBe(1));
     expect(await attempts()).toEqual([
       { puzzleId: undefined, result: 'mistake', rated: false, source: 'lesson' },
-      { puzzleId: undefined, result: 'clean', rated: false, source: 'lesson' },
     ]);
   });
 

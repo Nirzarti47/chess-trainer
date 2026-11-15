@@ -13,7 +13,10 @@ export function schedule(
   if (result !== 'clean') {
     return { puzzleId, stage: 0, dueDay: addDays(today, INTERVALS[0]) };
   }
-  if (!item || item.stage === 3) return null;
+  if (!item) return null;
+  // Чистое решение раньше срока (возврат в уроке, задача из очереди в «Подборке») ступень не двигает.
+  if (item.dueDay > today) return item;
+  if (item.stage === 3) return null;
   const stage = (item.stage + 1) as 1 | 2 | 3;
   return { puzzleId, stage, dueDay: addDays(today, INTERVALS[stage]) };
 }

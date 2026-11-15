@@ -15,6 +15,11 @@ describe('srs', () => {
     expect(schedule({ ...s0, stage: 1 }, 'p1', 'clean', '2026-11-17')).toEqual({ puzzleId: 'p1', stage: 2, dueDay: '2026-11-24' });
     expect(schedule({ ...s0, stage: 2 }, 'p1', 'clean', '2026-11-24')).toEqual({ puzzleId: 'p1', stage: 3, dueDay: '2026-12-15' });
   });
+  it('чистое решение раньше срока ступень не двигает', () => {
+    expect(schedule(s0, 'p1', 'clean', '2026-11-13')).toBe(s0);
+    const s1 = { puzzleId: 'p1', stage: 1 as const, dueDay: '2026-11-17' };
+    expect(schedule(s1, 'p1', 'clean', '2026-11-15')).toBe(s1);
+  });
   it('последняя ступень чисто — задача выходит из повторения', () =>
     expect(schedule({ ...s0, stage: 3 }, 'p1', 'clean', '2026-12-15')).toBeNull());
   it('подсказка сбрасывает на начало', () =>
