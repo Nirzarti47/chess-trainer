@@ -52,7 +52,7 @@ describe('ProfileScreen: прогресс', () => {
     expect(screen.getByLabelText('Рейтинг в задачах').textContent).toBe('600');
     expect(screen.getByLabelText('Пройдено тем').textContent).toBe('0');
     expect(screen.getByLabelText('Пройдено уроков').textContent).toBe('0');
-    expect(screen.getByLabelText('Решено задач').textContent).toBe('0');
+    expect(screen.getByLabelText('Решено без ошибок').textContent).toBe('0');
     expect(screen.getByText('График появится после первых задач')).toBeTruthy();
     expect(screen.getByText('Статистика по темам появится после первых уроков')).toBeTruthy();
     expect(screen.getByText('Пропуск на этой неделе: есть')).toBeTruthy();
@@ -109,7 +109,7 @@ describe('ProfileScreen: прогресс', () => {
     expect(screen.getByLabelText('Рейтинг в задачах').textContent).toBe('870');
     expect(screen.getByLabelText('Пройдено тем').textContent).toBe('0');
     expect(screen.getByLabelText('Пройдено уроков').textContent).toBe('2');
-    expect(screen.getByLabelText('Решено задач').textContent).toBe('2');
+    expect(screen.getByLabelText('Решено без ошибок').textContent).toBe('2');
     expect(screen.getByRole('img', { name: 'График рейтинга' }).querySelector('polyline')).toBeTruthy();
 
     const names = (label: string) => within(screen.getByRole('list', { name: label }))

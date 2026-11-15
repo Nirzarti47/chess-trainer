@@ -216,7 +216,7 @@ export function ProfileScreen() {
       <div className="profile-card profile-stats profile-stats--three">
         <Stat label="Пройдено тем" value={data.themesDone} />
         <Stat label="Пройдено уроков" value={data.lessonsDone} />
-        <Stat label="Решено задач" value={data.puzzlesSolved} />
+        <Stat label="Решено без ошибок" value={data.puzzlesSolved} />
       </div>
 
       {data.strong.length === 0

@@ -171,6 +171,25 @@ describe('FirstLoadScreen', () => {
     expect(screen.getByText(LOADING)).toBeTruthy();
   });
 
+  it('если установка сорвалась до первого подсчёта, сообщение об остановке не затирается', async () => {
+    const worker = fakeInstallingWorker();
+    setEnv({ installing: worker, stored: 3 });
+    // Подсчёт записей медленный: воркер успевает сорваться, пока первый подсчёт ещё идёт.
+    vi.stubGlobal('caches', {
+      match: () => Promise.resolve(undefined),
+      keys: () => Promise.resolve(['workbox-precache-v2-test']),
+      open: () => new Promise((resolve) => setTimeout(() => resolve({ keys: () => Promise.resolve([1, 2, 3]) }), 60)),
+    });
+    renderScreen();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    act(() => {
+      worker.state = 'redundant';
+      worker.dispatchEvent(new Event('statechange'));
+    });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+    expect(screen.getByText(STALLED)).toBeTruthy();
+  });
+
   it('если сохранение 90 секунд стоит на месте, предлагает повторить, и повтор заново заводит отсчёт', async () => {
     vi.useFakeTimers();
     setEnv({ active: true, stored: 3, expected: 10 });

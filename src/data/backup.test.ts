@@ -122,7 +122,8 @@ describe('резервная копия', () => {
     await fillState();
     const before = await snapshot();
     const good = JSON.parse(await (await exportBackup()).text());
-    good.tables.themeStats = [{ rating: 1 }]; // нет ключа theme
+    // Каждая строка проходит разбор, но две попытки с одним id падают уже при записи (BulkError).
+    good.tables.attempts = [{ id: 1, puzzleId: 'a' }, { id: 1, puzzleId: 'b' }];
     await expect(importBackup(JSON.stringify(good))).rejects.toThrow(new BackupError('Файл повреждён'));
     expect(await snapshot()).toEqual(before);
   });

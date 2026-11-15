@@ -82,7 +82,7 @@ export async function importBackup(text: string): Promise<void> {
     });
   } catch (e: unknown) {
     // Ключи проверены в parse; оставшиеся ошибки ограничений — тоже испорченный файл.
-    if (e instanceof Error && e.name === 'ConstraintError') throw new BackupError('Файл повреждён');
+    if (e instanceof Error && (e.name === 'ConstraintError' || e.name === 'BulkError')) throw new BackupError('Файл повреждён');
     console.error('Не удалось записать копию', e);
     throw new BackupError('Не удалось записать данные');
   }

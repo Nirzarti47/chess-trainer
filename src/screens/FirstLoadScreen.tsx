@@ -170,10 +170,10 @@ export function FirstLoadScreen({ children, skip = import.meta.env.DEV }: FirstL
         const puzzles = await countPuzzleFiles();
         if (stopped) return;
         if (stored !== lastStored) {
+          // Записи прибавляются после первого подсчёта — значит, установка идёт (или пошла новая после сбоя).
+          if (lastStored >= 0 && stored > lastStored) failed = false;
           lastStored = stored;
           lastChange = Date.now();
-          // Записи прибавляются — значит, установка идёт (или пошла новая после сбоя).
-          failed = false;
         } else if (Date.now() - lastChange >= STALL_MS) {
           failed = true;
         }
