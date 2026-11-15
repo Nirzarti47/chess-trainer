@@ -4,6 +4,11 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: './',
+  // Время сборки показывается в «О приложении»: по нему видно, какая версия установлена.
+  // Номер коммита приходит из окружения выкладки (VITE_BUILD_COMMIT в deploy.yml).
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     react(),
     VitePWA({

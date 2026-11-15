@@ -13,6 +13,17 @@ const CREDITS: { what: string; name: string; license: string }[] = [
   { what: 'Шрифт', name: 'Golos Text', license: 'SIL Open Font License' },
 ];
 
+/** Короткий номер коммита, из которого собрана выкладка; при сборке на компьютере — dev. */
+const BUILD_COMMIT = (import.meta.env.VITE_BUILD_COMMIT as string | undefined)?.slice(0, 7) || 'dev';
+
+/** «15.11.2026, 14:20» по часам устройства. */
+function formatBuildTime(iso: string): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  return `${date}, ${time}`;
+}
+
 /** Экран «О приложении»: что это и чьи работы в нём использованы. */
 export function AboutScreen() {
   return (
@@ -25,6 +36,10 @@ export function AboutScreen() {
       <p className="profile-text profile-pad">
         Тренажёр шахматной тактики: уроки по темам, задачи и повторение трудных мест. Работает без сети,
         прогресс хранится на этом устройстве.
+      </p>
+
+      <p className="profile-text profile-pad">
+        Версия от {formatBuildTime(__BUILD_TIME__)} (сборка {BUILD_COMMIT})
       </p>
 
       <h2>Фигуры</h2>

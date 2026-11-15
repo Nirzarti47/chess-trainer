@@ -383,6 +383,8 @@ describe('AboutScreen', () => {
       'Golos Text', 'SIL Open Font License', 'Код приложения открыт под лицензией GPL-3.0']) {
       expect(text).toContain(part);
     }
+    // Версия: дата и время сборки, чтобы было видно, дошло ли обновление.
+    expect(text).toMatch(/Версия от \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2} \(сборка [0-9a-z]+\)/);
     // Ссылка на исходный код (GPL-3.0) ведёт в репозиторий.
     const link = screen.getByRole('link', { name: /репозитор/i });
     expect(link.getAttribute('href')).toBe(REPO_URL);
