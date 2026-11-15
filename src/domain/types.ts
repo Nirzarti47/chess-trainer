@@ -1,11 +1,12 @@
 export type ThemeId = string;
 export type TaskResult = 'clean' | 'mistake' | 'hint';
-export type Source = 'lesson' | 'free' | 'review' | 'weak' | 'exam';
+export type Source = 'lesson' | 'free' | 'review' | 'weak' | 'exam' | 'game' | 'pattern';
 export type Circle = 0 | 1 | 2 | 3;
 
 /** Формат Lichess: fen — позиция ДО хода соперника; moves[0] — ход соперника,
  *  moves[1] — первый ход решающего, дальше по очереди. Ходы в UCI. */
-export interface Puzzle { id: string; fen: string; moves: string[]; rating: number; themes: ThemeId[] }
+export interface Puzzle { id: string; fen: string; moves: string[]; rating: number; themes: ThemeId[];
+  game?: { gameId: string; ply: number; phrase: string } }   // только у задач из партий
 
 export interface ThemeStat { theme: ThemeId; rating: number; solved: number; clean: number }
 export interface ReviewItem { puzzleId: string; stage: 0 | 1 | 2 | 3; dueDay: string }   // день: 'YYYY-MM-DD'
