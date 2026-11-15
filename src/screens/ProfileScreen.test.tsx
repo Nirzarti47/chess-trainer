@@ -7,7 +7,7 @@ import { db } from '../data/db';
 import { getProfile } from '../data/repo';
 import { addDays, localDay } from '../domain/dates';
 import type { Profile } from '../domain/types';
-import { AboutScreen } from './AboutScreen';
+import { AboutScreen, REPO_URL } from './AboutScreen';
 import { BackupScreen, RELOAD_DELAY_MS } from './BackupScreen';
 import { CHART_POINTS, ProfileScreen, thinPoints } from './ProfileScreen';
 
@@ -383,7 +383,9 @@ describe('AboutScreen', () => {
       'Golos Text', 'SIL Open Font License', 'Код приложения открыт под лицензией GPL-3.0']) {
       expect(text).toContain(part);
     }
-    // Репозитория пока нет — ссылки тоже нет.
-    expect(screen.queryByRole('link', { name: /репозитор/i })).toBeNull();
+    // Ссылка на исходный код (GPL-3.0) ведёт в репозиторий.
+    const link = screen.getByRole('link', { name: /репозитор/i });
+    expect(link.getAttribute('href')).toBe(REPO_URL);
+    expect(REPO_URL).toMatch(/^https:\/\/github\.com\//);
   });
 });

@@ -3,7 +3,7 @@ import { PIECE_SETS } from '../content/pieceSets';
 import './ProfileScreen.css';
 
 /** Адрес репозитория с кодом приложения. Пока репозитория нет, ссылка не показывается. */
-export const REPO_URL = '';
+export const REPO_URL = 'https://github.com/Nirzarti47/chess-trainer';
 
 const CREDITS: { what: string; name: string; license: string }[] = [
   { what: 'Доска', name: 'chessground', license: 'GPL-3.0' },
