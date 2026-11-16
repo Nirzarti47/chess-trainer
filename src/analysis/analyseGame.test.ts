@@ -4,6 +4,7 @@ import type { GameRecord, Side } from '../domain/gameTypes';
 import type { EngineLine } from '../engine/analysisEngine';
 import { analyseGame } from './analyseGame';
 import { CONFIG } from './config';
+import { expected } from './score';
 import { tableEngine } from './testEngine';
 
 const game = (moves: string[], userColor: Side = 'white'): GameRecord => ({
@@ -120,5 +121,44 @@ describe('analyseGame', () => {
     expect(seen[0][1]).toBe(BLUNDER.length + 1);
     const [done, total] = seen[seen.length - 1];
     expect(done).toBe(total);
+  });
+
+  it('матующий последний ход во втором проходе: оценка после хода — «партия закончена»', async () => {
+    const fens = fensOf(SCHOLAR);
+    // перед матом первая линия — мат в 1, вторая заметно хуже: ход уходит во второй проход как «сильный»
+    const engine = tableEngine({ [fens[6]]: [{ move: 'h5f7', score: { mate: 1 }, pv: ['h5f7'] }, line('h5e5', 0)] });
+    const a = await analyseGame(game(SCHOLAR), { engine, priority: 'background' });
+    expect(a!.moves[6].deep).toBe(true);
+    expect(a!.scores[7]).toEqual({ over: 'white' });
+    expect(a!.scores[6]).toEqual({ mate: 1 });
+  });
+
+  it('глубокий разбор хода белых: оценка падает с 0 до -400 → грубая ошибка', async () => {
+    const fens = fensOf(['e2e4', 'e7e5']);
+    // движок отдаёт оценку с точки зрения стороны, чей ход: чёрные видят +400
+    const engine = tableEngine({ [fens[0]]: [line('d2d4', 0)], [fens[1]]: [line('e7e5', 400)] });
+    const a = await analyseGame(game(['e2e4', 'e7e5']), { engine, priority: 'background' });
+    const m = a!.moves[0];
+    expect(m.deep).toBe(true);
+    expect(m.grade).toBe('blunder');
+    expect(m.loss).toBeGreaterThan(0.2);
+    expect(a!.scores[1]).toEqual({ cp: -400 });
+  });
+
+  it('сыгранный ход найден среди глубоких линий: оценка и потеря берутся из его линии', async () => {
+    const moves = ['e2e4', 'e7e5'];
+    const fens = fensOf(moves);
+    // d2d4 — первая линия, e2e4 — вторая (-150); ответ чёрных даёт -100 и запускает глубокий разбор
+    const engine = tableEngine({
+      [fens[0]]: [line('d2d4', 0), line('e2e4', -150)],
+      [fens[1]]: [line('e7e5', 100)],
+      [fens[2]]: [line('g1f3', -100)], // ход чёрных ничего не теряет и во второй проход не идёт
+    });
+    const a = await analyseGame(game(moves), { engine, priority: 'background' });
+    const m = a!.moves[0];
+    expect(m.deep).toBe(true);
+    expect(a!.scores[1]).toEqual({ cp: -150 });
+    expect(m.loss).toBeCloseTo(expected({ cp: 0 }, 'white') - expected({ cp: -150 }, 'white'), 10);
+    expect(m.best.map((b) => b.move)).toEqual(['d2d4', 'e2e4']);
   });
 });

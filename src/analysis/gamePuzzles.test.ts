@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AltMove, GameAnalysis, GamePuzzle, GameRecord, MoveReview, Score, SideSummary } from '../domain/gameTypes';
 import { startPuzzle, tryMove } from '../domain/puzzle';
+import { OTHER_PHRASE } from './phrases';
 import { gamePuzzleId, isGamePuzzleId, reconcile, selectPuzzles, toPuzzle } from './gamePuzzles';
 
 const CYCLE = ['g1f3', 'g8f6', 'f3g1', 'f6g8'];
@@ -54,6 +55,11 @@ describe('selectPuzzles', () => {
     });
     const s = startPuzzle(toPuzzle(p));
     expect(tryMove(s, p.moves[1]).outcome).toBe('solved');
+  });
+
+  it('ход без фразы получает общую фразу', () => {
+    const [p] = selectPuzzles(game, analysis({ 2: blunder(2, { kind: undefined, phrase: undefined }) }));
+    expect(p.phrase).toBe(OTHER_PHRASE);
   });
 
   it('отбрасывает неподходящие ходы', () => {

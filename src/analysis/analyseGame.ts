@@ -110,7 +110,8 @@ export async function analyseGame(game: GameRecord, deps: AnalyseDeps): Promise<
     }
     const best = lines.map((l) => toAlt(l, positions[i].turn));
     const before = best[0].score;
-    const after = best.find((b) => b.move === m.move)?.score ?? next;
+    // конец партии на доске — всегда «партия закончена», а не оценка движка
+    const after = positions[i + 1].over ?? best.find((b) => b.move === m.move)?.score ?? next;
     scores[i] = before;
     scores[i + 1] = after;
     m.best = best;

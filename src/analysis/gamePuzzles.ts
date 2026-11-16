@@ -3,7 +3,7 @@ import { Chess } from 'chess.js';
 import type { GameAnalysis, GamePuzzle, GameRecord, Side } from '../domain/gameTypes';
 import type { Puzzle } from '../domain/types';
 import { CONFIG } from './config';
-import { THEMES_OF_KIND } from './phrases';
+import { OTHER_PHRASE, THEMES_OF_KIND } from './phrases';
 import { expected } from './score';
 
 export const gamePuzzleId = (gameId: string, ply: number) => `g:${gameId}:${ply}`;
@@ -32,7 +32,7 @@ export function selectPuzzles(game: GameRecord, a: GameAnalysis): GamePuzzle[] {
     .map((m) => ({
       id: gamePuzzleId(game.id, m.ply), gameId: game.id, ply: m.ply, endTime: game.endTime,
       fen: fenAt(game.moves, m.ply - 1), moves: [game.moves[m.ply - 1], m.best[0].move],
-      kind: m.kind ?? 'other', phrase: m.phrase ?? '', loss: m.loss,
+      kind: m.kind ?? 'other', phrase: m.phrase ?? OTHER_PHRASE, loss: m.loss,
     }));
 }
 
