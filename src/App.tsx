@@ -3,6 +3,7 @@ import { GamesBackground } from './games/gamesStore';
 import { AboutScreen } from './screens/AboutScreen';
 import { AppearanceScreen } from './screens/AppearanceScreen';
 import { BackupScreen } from './screens/BackupScreen';
+import { GamesScreen } from './screens/games/GamesScreen';
 import { LearnScreen } from './screens/LearnScreen';
 import { LessonScreen, WeakSpotsScreen } from './screens/LessonScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
@@ -31,6 +32,7 @@ function Layout() {
           <Route path="/" element={<Navigate to="/learn" replace />} />
           <Route path="/learn" element={<LearnScreen />} />
           <Route path="/puzzles" element={<PuzzlesScreen />} />
+          <Route path="/games" element={<GamesScreen />} />
           <Route path="/profile" element={<ProfileScreen />} />
           <Route path="/profile/appearance" element={<AppearanceScreen />} />
           <Route path="/profile/backup" element={<BackupScreen />} />

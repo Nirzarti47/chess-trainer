@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { PIECE_SETS } from '../content/pieceSets';
 import { exportBackup } from '../data/backup';
 import { db } from '../data/db';
+import { setChessUser } from '../data/gamesRepo';
 import { getProfile } from '../data/repo';
 import { addDays, localDay } from '../domain/dates';
 import type { Profile } from '../domain/types';
@@ -389,5 +390,49 @@ describe('AboutScreen', () => {
     const link = screen.getByRole('link', { name: /репозитор/i });
     expect(link.getAttribute('href')).toBe(REPO_URL);
     expect(REPO_URL).toMatch(/^https:\/\/github\.com\//);
+  });
+});
+
+describe('Профиль: ник', () => {
+  const change = vi.fn(async (_nick: string) => {});
+  const sync = vi.fn(async () => {});
+  const fetchPlayer = vi.fn(async (_nick: string) => {});
+
+  beforeEach(() => {
+    change.mockClear();
+    sync.mockClear();
+  });
+
+  const renderProfile = () => render(
+    <MemoryRouter initialEntries={['/profile']}>
+      <ProfileScreen fetchPlayer={fetchPlayer} sync={sync} change={change} />
+    </MemoryRouter>,
+  );
+
+  it('смена ника вызывает changeNick только после подтверждения в листе', async () => {
+    await setChessUser({ nick: 'owner_test', loadedThrough: null });
+    renderProfile();
+    fireEvent.click(await screen.findByRole('button', { name: /Ник на Chess.com: owner_test/ }));
+    expect(screen.getByText('Партии и задачи из них для прежнего ника будут удалены')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Ник на Chess.com'), { target: { value: ' Rival_One ' } });
+    expect(change).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Сменить ник' }));
+    await waitFor(() => expect(change).toHaveBeenCalledWith('rival_one'));
+    expect(sync).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('закрытие листа ничего не меняет', async () => {
+    await setChessUser({ nick: 'owner_test', loadedThrough: null });
+    renderProfile();
+    fireEvent.click(await screen.findByRole('button', { name: /Ник на Chess.com: owner_test/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(change).not.toHaveBeenCalled();
+  });
+
+  it('без ника строка называется «Подключить Chess.com»', async () => {
+    renderProfile();
+    expect(await screen.findByRole('button', { name: /Подключить Chess.com/ })).toBeTruthy();
   });
 });

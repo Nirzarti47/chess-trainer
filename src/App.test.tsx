@@ -8,13 +8,14 @@ describe('App', () => {
     window.location.hash = '';
   });
 
-  it('показывает три вкладки', () => {
+  it('показывает четыре вкладки', () => {
     render(<App />);
     const nav = screen.getByRole('navigation');
     expect(nav.textContent).toContain('Учёба');
     expect(nav.textContent).toContain('Задачи');
+    expect(nav.textContent).toContain('Партии');
     expect(nav.textContent).toContain('Профиль');
-    expect(screen.getAllByRole('link')).toHaveLength(3);
+    expect(screen.getAllByRole('link')).toHaveLength(4);
   });
 
   it('вкладка «Учёба» показывает путь обучения', async () => {

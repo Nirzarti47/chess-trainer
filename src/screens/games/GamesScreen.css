@@ -1,0 +1,143 @@
+/* Вкладка «Партии» и форма ника */
+.games {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 16px 28px;
+}
+
+.games h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.games-note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.games-patterns {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 0 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.games-patterns span {
+  font-size: 22px;
+  color: var(--muted);
+}
+
+.games-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.games-status p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.games-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.games-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.games-color {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--muted);
+}
+
+.games-color--white { background: #f2f5f6; }
+.games-color--black { background: #0e161c; }
+
+.games-row-main,
+.games-row-side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.games-row-main { flex: 1; }
+.games-row-side { align-items: flex-end; }
+
+.games-row-main b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.games-rating { font-weight: 400; color: var(--muted); }
+.games-row-sub { font-size: 12.5px; color: var(--muted); }
+.games-result { font-size: 14px; font-weight: 600; }
+.games-result--win { color: var(--success); }
+.games-result--loss { color: #e8873a; }
+.games-result--draw { color: var(--weak); }
+
+/* Форма ника */
+.nick-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nick-form label {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.nick-form input {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 2px solid var(--surface);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+
+.nick-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.nick-error {
+  margin: 0;
+  font-size: 14px;
+  color: #e8873a;
+}

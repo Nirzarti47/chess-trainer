@@ -34,4 +34,10 @@ describe('TabBar', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByRole('img', { name: DOT })).toBeNull();
   });
+
+  it('четыре вкладки по порядку, «Партии» ведёт на /games', () => {
+    renderBar();
+    expect(screen.getAllByRole('link').map((a) => a.textContent)).toEqual(['Учёба', 'Задачи', 'Партии', 'Профиль']);
+    expect(screen.getByRole('link', { name: 'Партии' }).getAttribute('href')).toBe('/games');
+  });
 });

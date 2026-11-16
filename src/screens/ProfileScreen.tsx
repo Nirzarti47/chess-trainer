@@ -4,12 +4,15 @@ import { THEMES } from '../content/themes';
 import {
   getActiveDays, getLessonProgress, getProfile, getRatingHistory, getSolvedPuzzleCount, getThemeStats, snoozeBackup,
 } from '../data/repo';
+import { getChessUser } from '../data/gamesRepo';
 import { backupReminderDue } from '../domain/backupReminder';
 import { localDay } from '../domain/dates';
 import { buildPath } from '../domain/path';
 import { computeStreak, type StreakInfo } from '../domain/streak';
 import type { ThemeStat } from '../domain/types';
 import { BigButton } from '../ui/BigButton';
+import { Sheet } from '../ui/Sheet';
+import { NickForm, type NickFormProps } from './games/NickForm';
 import { plural } from '../ui/plural';
 import './ProfileScreen.css';
 
@@ -108,9 +111,36 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function ProfileMenu() {
+type NickDeps = Pick<NickFormProps, 'fetchPlayer' | 'sync' | 'change'>;
+
+/** Строка «Ник на Chess.com»: открывает лист со сменой ника и предупреждением. */
+function NickRow(deps: NickDeps) {
+  const [nick, setNick] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    getChessUser().then((u) => { if (alive) setNick(u?.nick ?? null); }, () => undefined);
+    return () => { alive = false; };
+  }, [open]);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        {nick ? `Ник на Chess.com: ${nick}` : 'Подключить Chess.com'}<span aria-hidden="true">›</span>
+      </button>
+      {open && (
+        <Sheet label="Смена ника" onClose={() => setOpen(false)}>
+          {nick && <p className="sheet-text">Партии и задачи из них для прежнего ника будут удалены</p>}
+          <NickForm current={nick ?? undefined} onSaved={() => setOpen(false)} {...deps} />
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+function ProfileMenu(deps: NickDeps) {
   return (
     <nav className="profile-menu" aria-label="Настройки">
+      <NickRow {...deps} />
       <Link to="/profile/appearance">Оформление<span aria-hidden="true">›</span></Link>
       <Link to="/profile/backup">Резервная копия<span aria-hidden="true">›</span></Link>
       <Link to="/profile/about">О приложении<span aria-hidden="true">›</span></Link>
@@ -119,7 +149,7 @@ function ProfileMenu() {
 }
 
 /** Экран «Профиль»: серия, опыт, рейтинг, темы и вход в настройки. */
-export function ProfileScreen() {
+export function ProfileScreen(deps: NickDeps) {
   const navigate = useNavigate();
   const [data, setData] = useState<ProfileData | null>(null);
   const [failed, setFailed] = useState(false);
@@ -167,7 +197,7 @@ export function ProfileScreen() {
           <p className="profile-hint">Не удалось загрузить профиль</p>
           <BigButton onClick={() => setAttempt((n) => n + 1)}>Повторить</BigButton>
         </div>
-        <ProfileMenu />
+        <ProfileMenu {...deps} />
       </section>
     );
   }
@@ -228,7 +258,7 @@ export function ProfileScreen() {
           </>
         )}
 
-      <ProfileMenu />
+      <ProfileMenu {...deps} />
     </section>
   );
 }

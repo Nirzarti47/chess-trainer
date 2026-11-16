@@ -26,6 +26,16 @@ const TABS = [
     ),
   },
   {
+    to: '/games',
+    label: 'Партии',
+    icon: (
+      <>
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <path d="M4 12h16M12 4v16" />
+      </>
+    ),
+  },
+  {
     to: '/profile',
     label: 'Профиль',
     icon: (
