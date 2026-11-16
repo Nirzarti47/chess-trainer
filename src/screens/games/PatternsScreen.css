@@ -1,0 +1,146 @@
+/* «Частые ошибки» */
+.patterns {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100%;
+  padding: 18px 16px 0;
+}
+
+.patterns-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.patterns h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.patterns h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.patterns-back {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.patterns-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* На узком экране кнопки переносятся на новую строку */
+.patterns-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.patterns-option {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 2px solid transparent;
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+  cursor: pointer;
+}
+
+.patterns-option[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.patterns-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.patterns-status p,
+.patterns-note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.patterns-empty {
+  margin: 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 15px;
+}
+
+.patterns-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.patterns-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 15px;
+}
+
+.patterns-kind {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.patterns-bar {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.patterns-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: #E8873A;
+}
+
+/* Кнопка прижата к низу, как в уроке */
+.patterns-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  margin: auto -16px 0;
+  padding: 18px 14px calc(16px + env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, transparent, var(--bg) 14px);
+}
+
+.patterns-actions .big-button { flex: 1; }

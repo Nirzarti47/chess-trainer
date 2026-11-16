@@ -116,9 +116,11 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
   return (
     <section className="games">
       <h1>Партии</h1>
-      <Link to="/games/patterns" className="games-patterns">
-        Частые ошибки<span aria-hidden="true">›</span>
-      </Link>
+      {games && games.length > 0 && (
+        <Link to="/games/patterns" className="games-patterns">
+          Частые ошибки<span aria-hidden="true">›</span>
+        </Link>
+      )}
       <div className="games-status">
         <p role="status">{status}</p>
         {state.sync === 'error' && <BigButton variant="surface" onClick={() => void sync()}>Повторить</BigButton>}

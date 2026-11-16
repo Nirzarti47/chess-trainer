@@ -5,6 +5,7 @@ import { AppearanceScreen } from './screens/AppearanceScreen';
 import { BackupScreen } from './screens/BackupScreen';
 import { GamesScreen } from './screens/games/GamesScreen';
 import { GameSummaryScreen } from './screens/games/GameSummaryScreen';
+import { PatternsScreen } from './screens/games/PatternsScreen';
 import { ReviewScreen } from './screens/games/ReviewScreen';
 import { LearnScreen } from './screens/LearnScreen';
 import { LessonScreen, RepeatLessonScreen, WeakSpotsScreen } from './screens/LessonScreen';
@@ -42,6 +43,9 @@ function Layout() {
           <Route path="/learn" element={<LearnScreen />} />
           <Route path="/puzzles" element={<PuzzlesScreen />} />
           <Route path="/games" element={<GamesScreen />} />
+          {/* Раньше /games/:gameId, иначе «patterns» примут за номер партии. */}
+          <Route path="/games/patterns" element={<PatternsScreen />} />
+          <Route path="/games/patterns/train" element={<RepeatLessonScreen nodeId="pattern" exitTo="/games/patterns" />} />
           <Route path="/games/:gameId" element={<GameSummaryScreen />} />
           <Route path="/games/:gameId/review" element={<ReviewScreen />} />
           <Route path="/games/:gameId/fix" element={<FixRoute />} />

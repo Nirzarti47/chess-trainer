@@ -145,6 +145,15 @@ export function buildExam(a: { section: Section; pool: PuzzlePool; ratings: Reco
   return byRating(out);
 }
 
+/** total задач поровну между темами около near, сначала новые; без добора из других тем. */
+export function buildFromThemes(a: { themes: ThemeId[]; total: number; near: number; pool: PuzzlePool;
+  band: [number, number]; seen: ReadonlySet<string>; rng: () => number }): Puzzle[] {
+  const c: Ctx = { pool: a.pool, band: a.band, seen: a.seen, taken: new Set(), rng: a.rng };
+  const out: Puzzle[] = [];
+  for (const [t, n] of roundRobin(a.themes, a.total)) out.push(...fromTheme(c, t, a.near, n));
+  return out;
+}
+
 export function buildWeakSpots(a: { due: Puzzle[]; weakThemes: ThemeId[]; ratings: Record<ThemeId, number>;
   pool: PuzzlePool; band: [number, number]; seen: ReadonlySet<string>; rng: () => number }): Puzzle[] {
   const c: Ctx = { pool: a.pool, band: a.band, seen: a.seen, taken: new Set(), rng: a.rng };

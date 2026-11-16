@@ -48,4 +48,16 @@ describe('App', () => {
     render(<App />);
     expect(screen.getByRole('navigation')).toBeTruthy();
   });
+
+  it('/games/patterns — экран «Частые ошибки», а не сводка партии; на тренировке вкладки скрыты', async () => {
+    window.location.hash = '#/games/patterns';
+    const { unmount } = render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Частые ошибки' })).toBeTruthy();
+    expect(screen.queryByText('Партия не найдена')).toBeNull();
+    expect(screen.getByRole('navigation')).toBeTruthy();
+    unmount();
+    window.location.hash = '#/games/patterns/train';
+    render(<App />);
+    expect(screen.queryByRole('navigation')).toBeNull();
+  });
 });

@@ -178,8 +178,9 @@ describe('GamesScreen: список', () => {
   });
 });
 
-it('пустой список: «Партий пока нет»', async () => {
+it('пустой список: «Партий пока нет», ссылки «Частые ошибки» нет', async () => {
   await setChessUser({ nick: 'owner_test', loadedThrough: null });
   renderGames();
   expect(await screen.findByText('Партий пока нет')).toBeTruthy();
+  expect(screen.queryByRole('link', { name: /Частые ошибки/ })).toBeNull();
 });
