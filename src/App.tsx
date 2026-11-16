@@ -1,4 +1,5 @@
 import { HashRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { GamesBackground } from './games/gamesStore';
 import { AboutScreen } from './screens/AboutScreen';
 import { AppearanceScreen } from './screens/AppearanceScreen';
 import { BackupScreen } from './screens/BackupScreen';
@@ -49,6 +50,7 @@ export default function App() {
     <ErrorBoundary>
       <SettingsProvider>
         <HashRouter>
+          <GamesBackground />
           <Layout />
         </HashRouter>
       </SettingsProvider>
