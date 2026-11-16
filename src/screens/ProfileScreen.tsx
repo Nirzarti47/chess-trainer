@@ -5,6 +5,7 @@ import {
   getActiveDays, getLessonProgress, getProfile, getRatingHistory, getSolvedPuzzleCount, getThemeStats, snoozeBackup,
 } from '../data/repo';
 import { getChessUser } from '../data/gamesRepo';
+import type { ChessUser } from '../domain/gameTypes';
 import { backupReminderDue } from '../domain/backupReminder';
 import { localDay } from '../domain/dates';
 import { buildPath } from '../domain/path';
@@ -111,23 +112,37 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-type NickDeps = Pick<NickFormProps, 'fetchPlayer' | 'sync' | 'change'>;
+type NickDeps = Pick<NickFormProps, 'fetchPlayer' | 'sync' | 'change'> & {
+  /** Чтение ника из базы; в тестах подменяется. */
+  readUser?: () => Promise<ChessUser | null>;
+};
 
 /** Строка «Ник на Chess.com»: открывает лист со сменой ника и предупреждением. */
-function NickRow(deps: NickDeps) {
-  const [nick, setNick] = useState<string | null>(null);
+function NickRow({ readUser = getChessUser, ...deps }: NickDeps) {
+  // undefined — ещё не прочитан, null — ника нет, строка — ник есть.
+  const [nick, setNick] = useState<string | null | undefined>(undefined);
+  const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState(false);
   useEffect(() => {
+    if (open) return;
     let alive = true;
-    getChessUser().then((u) => { if (alive) setNick(u?.nick ?? null); }, () => undefined);
+    readUser().then(
+      (u) => { if (alive) { setNick(u?.nick ?? null); setFailed(false); } },
+      () => { if (alive) setFailed(true); },
+    );
     return () => { alive = false; };
-  }, [open]);
+  }, [open, readUser]);
+  const ready = nick !== undefined && !failed;
+  let label: string;
+  if (failed) label = 'Не удалось прочитать ник';
+  else if (nick === undefined) label = 'Ник на Chess.com';
+  else label = nick ? `Ник на Chess.com: ${nick}` : 'Подключить Chess.com';
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}>
-        {nick ? `Ник на Chess.com: ${nick}` : 'Подключить Chess.com'}<span aria-hidden="true">›</span>
+      <button type="button" disabled={!ready} onClick={() => setOpen(true)}>
+        {label}<span aria-hidden="true">›</span>
       </button>
-      {open && (
+      {open && ready && (
         <Sheet label="Смена ника" onClose={() => setOpen(false)}>
           {nick && <p className="sheet-text">Партии и задачи из них для прежнего ника будут удалены</p>}
           <NickForm current={nick ?? undefined} onSaved={() => setOpen(false)} {...deps} />

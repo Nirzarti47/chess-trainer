@@ -77,7 +77,12 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
   }, [state.revision]);
 
   async function reloadUser() {
-    setUser(await getChessUser());
+    try {
+      setUser(await getChessUser());
+    } catch (e: unknown) {
+      // Экран остаётся в прежнем состоянии.
+      console.error('Не удалось прочитать ник', e);
+    }
   }
 
   if (failed) {

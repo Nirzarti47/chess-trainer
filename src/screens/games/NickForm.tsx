@@ -41,6 +41,11 @@ export function NickForm({
     e.preventDefault();
     const nick = normalizeNick(value);
     if (!nick || busy) return;
+    // Тот же ник: менять нечего, партии остаются.
+    if (current && nick === current) {
+      onSaved();
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -61,7 +66,7 @@ export function NickForm({
     <form className="nick-form" onSubmit={(e) => void submit(e)}>
       <label htmlFor="nick-input">Ник на Chess.com</label>
       <input id="nick-input" type="text" value={value} autoCapitalize="none" autoCorrect="off"
-        spellCheck={false} autoComplete="off" placeholder={current ?? 'Например, Magnus'}
+        spellCheck={false} autoComplete="off" placeholder={current ?? 'Твой ник на Chess.com'}
         onChange={(e) => setValue(e.target.value)} />
       {error && <p className="nick-error" role="alert">{error}</p>}
       <BigButton type="submit" disabled={busy || !normalizeNick(value)}>

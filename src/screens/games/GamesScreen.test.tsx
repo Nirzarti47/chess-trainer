@@ -75,6 +75,11 @@ describe('GamesScreen: ник', () => {
     expect(await screen.findByRole('button', { name: 'Обновить' })).toBeTruthy();
   });
 
+  it('подсказка в поле без чужих имён', async () => {
+    renderGames();
+    expect((await screen.findByLabelText('Ник на Chess.com') as HTMLInputElement).placeholder).toBe('Твой ник на Chess.com');
+  });
+
   it('«Игрок не найден»: ник не сохраняется', async () => {
     fetchPlayer.mockRejectedValue(new ChessComError('notFound', 'нет'));
     renderGames();

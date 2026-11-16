@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { PIECE_SETS } from '../content/pieceSets';
 import { exportBackup } from '../data/backup';
+import { ChessComError } from '../chesscom/api';
 import { db } from '../data/db';
 import { setChessUser } from '../data/gamesRepo';
 import { getProfile } from '../data/repo';
@@ -434,5 +435,60 @@ describe('Профиль: ник', () => {
   it('без ника строка называется «Подключить Chess.com»', async () => {
     renderProfile();
     expect(await screen.findByRole('button', { name: /Подключить Chess.com/ })).toBeTruthy();
+  });
+
+  it('пока ник не прочитан, нажатие на строку не открывает лист', async () => {
+    const readUser = vi.fn(() => new Promise<never>(() => {}));
+    render(
+      <MemoryRouter initialEntries={['/profile']}>
+        <ProfileScreen fetchPlayer={fetchPlayer} sync={sync} change={change} readUser={readUser} />
+      </MemoryRouter>,
+    );
+    const row = await screen.findByRole('button', { name: /Ник на Chess.com/ });
+    fireEvent.click(row);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Подключить Chess.com/ })).toBeNull();
+  });
+
+  it('сбой чтения ника: виден текст сбоя, лист не открывается', async () => {
+    const readUser = vi.fn(async () => { throw new Error('база закрыта'); });
+    render(
+      <MemoryRouter initialEntries={['/profile']}>
+        <ProfileScreen fetchPlayer={fetchPlayer} sync={sync} change={change} readUser={readUser} />
+      </MemoryRouter>,
+    );
+    const row = await screen.findByRole('button', { name: /Не удалось прочитать ник/ });
+    fireEvent.click(row);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Подключить Chess.com/ })).toBeNull();
+  });
+
+  it('смена на тот же ник (другой регистр, пробелы): запросов нет, лист закрывается', async () => {
+    await setChessUser({ nick: 'owner_test', loadedThrough: null });
+    fetchPlayer.mockClear();
+    renderProfile();
+    fireEvent.click(await screen.findByRole('button', { name: /Ник на Chess.com: owner_test/ }));
+    fireEvent.change(screen.getByLabelText('Ник на Chess.com'), { target: { value: ' OWNER_test ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Сменить ник' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(fetchPlayer).not.toHaveBeenCalled();
+    expect(change).not.toHaveBeenCalled();
+    expect(sync).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['notFound', 'Игрок не найден'],
+    ['offline', 'Нет сети. Проверь интернет и попробуй ещё раз'],
+  ] as const)('смена ника, проверка нового не прошла (%s): change не вызван, лист открыт, виден текст', async (kind, text) => {
+    await setChessUser({ nick: 'owner_test', loadedThrough: null });
+    fetchPlayer.mockRejectedValueOnce(new ChessComError(kind, 'сбой'));
+    renderProfile();
+    fireEvent.click(await screen.findByRole('button', { name: /Ник на Chess.com: owner_test/ }));
+    fireEvent.change(screen.getByLabelText('Ник на Chess.com'), { target: { value: 'rival_one' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Сменить ник' }));
+    expect(await screen.findByText(text)).toBeTruthy();
+    expect(change).not.toHaveBeenCalled();
+    expect(sync).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeTruthy();
   });
 });
