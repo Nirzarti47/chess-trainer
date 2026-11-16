@@ -112,9 +112,11 @@ export function classifyMistake(a: { fenBefore: string; played: string; best: Al
     }
     // 4–5. Соперник забирает фигуру (не пешку) с выигрышем материала
     const fenAfter = chess.fen();
+    // что сам сыгранный ход забрал: вычитается из выигрыша соперника (равный размен не ошибка)
+    const gained = played.captured ? PIECE_VALUE[played.captured] : 0;
     const r = playUci(chess, reply[0]);
     if (r?.captured && !r.flags.includes('e') && PIECE_VALUE[r.captured] >= CONFIG.MATERIAL_WIN
-      && swing(fenAfter, reply, 3) >= CONFIG.MATERIAL_WIN) {
+      && swing(fenAfter, reply, 3) - gained >= CONFIG.MATERIAL_WIN) {
       if (r.to === played.to) {
         const p = played.promotion ?? played.piece;
         return { kind: 'pieceEnPrise', phrase: `${cap(PIECE[p].nom)} поставлен${ending(p, 'а', '')} под бой: `
@@ -129,8 +131,8 @@ export function classifyMistake(a: { fenBefore: string; played: string; best: Al
     const board = new Chess(a.fenBefore);
     const m = playUci(board, top.move);
     const wins = swing(a.fenBefore, top.pv, 3) >= CONFIG.MATERIAL_WIN;
-    // 6. Пропущен захват
-    if (m?.captured && wins) {
+    // 6. Пропущен захват: первым ходом лучшей линии берётся фигура, а не пешка
+    if (m?.captured && PIECE_VALUE[m.captured] >= CONFIG.MATERIAL_WIN && wins) {
       const free = see(a.fenBefore, top.move) === PIECE_VALUE[m.captured];
       return { kind: 'missedCapture', phrase: `Можно было забрать ${PIECE[m.captured].acc}${free ? ' бесплатно' : ''}` };
     }

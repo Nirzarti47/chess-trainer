@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AltMove, Score, Side } from '../domain/gameTypes';
+import { Chess } from 'chess.js';
 import { classifyMistake } from './kinds';
 import { KIND_ADVICE, KIND_TITLE, THEMES_OF_KIND } from './phrases';
 import { THEMES } from '../content/themes';
@@ -165,5 +166,29 @@ describe('classifyMistake', () => {
   it('пустой список лучших ходов не роняет функцию', () => {
     expect(classifyMistake({ fenBefore: QUIET_FEN, played: 'e1d1', best: [], reply: null, after: { cp: 0 },
       mover: 'white' })).toEqual({ kind: 'other', phrase: 'Лучше было сыграть так' });
+  });
+  describe('поправки раунда 1', () => {
+    it('равный размен (слон берёт коня, пешка берёт слона) — не «фигура под боем»', () => {
+      const r = run('4k3/8/4p3/3n4/8/1B6/8/4K3 w - - 0 1', 'b3d5', alt('e1e2', { cp: 0 }), alt('e6d5', { cp: 0 }),
+        { cp: 0 });
+      expect(r).toEqual({ kind: 'other', phrase: 'Лучше было сыграть так' });
+    });
+
+    it('слон отдан за пешку — невыгодный размен', () => {
+      const r = run('4k3/8/4p3/3p4/8/1B6/8/4K3 w - - 0 1', 'b3d5', alt('e1e2', { cp: 100 }),
+        alt('e6d5', { cp: -200 }), { cp: -200 });
+      expect(r.kind).toBe('badTrade');
+      expect(r.phrase).toContain('слон за пешку');
+    });
+
+    it('лучший ход берёт пешку, а выигрыш позже в линии — не «пропущенный захват»', () => {
+      const fen = '6k1/r7/2p5/8/1N6/8/8/4K3 w - - 0 1';
+      const line = ['b4c6', 'g8f8', 'c6a7'];
+      const chess = new Chess(fen);
+      for (const u of line) chess.move({ from: u.slice(0, 2), to: u.slice(2, 4) });
+      expect(chess.history({ verbose: true }).map((m) => m.captured)).toEqual(['p', undefined, 'r']);
+      const r = run(fen, 'e1e2', alt('b4c6', { cp: 500 }, line), null, { cp: 0 });
+      expect(r.kind).not.toBe('missedCapture');
+    });
   });
 });
