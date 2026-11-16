@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { formatScore } from '../../analysis/score';
 import { getCurrentAnalysis, getGame } from '../../data/gamesRepo';
-import type { GameAnalysis, GameRecord } from '../../domain/gameTypes';
+import type { GameAnalysis, GameRecord, Score } from '../../domain/gameTypes';
 import { legalDests } from '../../domain/puzzle';
 import { analysisEngine, type AnalysisEngine } from '../../engine/analysisEngine';
 import { BigButton } from '../../ui/BigButton';
@@ -12,7 +12,9 @@ import { EvalBar } from './EvalBar';
 import { GameChart } from './GameChart';
 import { RESULT } from './GamesScreen';
 import { MoveCard, ruMove } from './MoveCard';
-import { alternatives, badgeText, buildPlyViews, chartPoints, moverOf, nextUserMistake, type PlyView } from './reviewModel';
+import {
+  alternatives, badgeText, bestArrowVisible, buildPlyViews, chartPoints, moverOf, nextUserMistake, type PlyView,
+} from './reviewModel';
 import { useExplore, type ExploreState } from './useExplore';
 import './ReviewScreen.css';
 
@@ -31,15 +33,17 @@ function startIndex(param: string | null, count: number): number {
   return Math.min(count - 1, Math.max(0, Math.floor(n) + 1));
 }
 
-/** Оформление доски для позиции разбора: подсветка хода, значок, стрелки лучшего хода и выбранного варианта. */
-function boardDecor(view: PlyView, alt: string | null): Pick<BoardProps, 'lastMove' | 'lastMoveTone' | 'badge' | 'arrows'> {
+type Decor = Pick<BoardProps, 'lastMove' | 'lastMoveTone' | 'badge' | 'arrows'>;
+
+const arrow = (uci: string, tone: 'best' | 'alt'): BoardArrow => ({ from: uci.slice(0, 2), to: uci.slice(2, 4), tone });
+
+/** Оформление доски для позиции после хода: подсветка хода, значок, стрелка лучшего хода (если она не из пустого поля). */
+function boardDecor(view: PlyView, beforeFen: string | null): Decor {
   const r = view.review;
   if (!r) return { lastMove: null, lastMoveTone: 'normal', badge: undefined, arrows: [] };
-  const arrow = (uci: string, tone: 'best' | 'alt'): BoardArrow => ({ from: uci.slice(0, 2), to: uci.slice(2, 4), tone });
   const arrows: BoardArrow[] = [];
-  if (alt) arrows.push(arrow(alt, 'alt'));
   const best = r.best[0]?.move;
-  if (best && best !== r.move && best !== alt) arrows.push(arrow(best, 'best'));
+  if (best && best !== r.move && beforeFen && bestArrowVisible(beforeFen, view.fen, best)) arrows.push(arrow(best, 'best'));
   const text = badgeText(r);
   return {
     lastMove: view.lastMove,
@@ -127,13 +131,42 @@ export function ReviewScreen({ engine = analysisEngine }: { engine?: Engine }) {
   return <Review key={phase.game.id} game={phase.game} analysis={phase.analysis} engine={engine} />;
 }
 
+/** Позиции партии; null — данные испорчены (недопустимый ход или число оценок не сходится с числом ходов). */
+function safeViews(game: GameRecord, analysis: GameAnalysis): PlyView[] | null {
+  if (analysis.scores.length !== game.moves.length + 1) return null;
+  try {
+    return buildPlyViews(game, analysis);
+  } catch (e) {
+    console.error('Не удалось построить позиции партии', e);
+    return null;
+  }
+}
+
 function Review({ game, analysis, engine }: { game: GameRecord; analysis: GameAnalysis; engine: Engine }) {
+  const navigate = useNavigate();
+  const views = useMemo(() => safeViews(game, analysis), [game, analysis]);
+  if (!views) {
+    return (
+      <section className="review review--message">
+        <h1>Не удалось показать разбор этой партии</h1>
+        <BigButton variant="surface" onClick={() => navigate(`/games/${game.id}`)}>К партии</BigButton>
+      </section>
+    );
+  }
+  return <ReviewBody game={game} analysis={analysis} views={views} engine={engine} />;
+}
+
+interface ReviewBodyProps { game: GameRecord; analysis: GameAnalysis; views: PlyView[]; engine: Engine }
+
+function ReviewBody({ game, analysis, views, engine }: ReviewBodyProps) {
   const [params] = useSearchParams();
-  const views = useMemo(() => buildPlyViews(game, analysis), [game, analysis]);
   const points = useMemo(() => chartPoints(analysis), [analysis]);
   // Текущая позиция — единственное состояние перемотки; адрес при перемотке не меняется.
   const [index, setIndex] = useState(() => startIndex(params.get('ply'), views.length));
+  // Выбранный вариант «Лучше было»: пока он выбран, доска показывает позицию ДО хода.
   const [chosen, setChosen] = useState<number | null>(null);
+  // Оценка позиции, с которой начат «Свой вариант», — шкала держит её, пока движок считает.
+  const [startScore, setStartScore] = useState<Score | null>(null);
   // «Свой вариант»: пока он открыт, позиция и карточка партии не меняются.
   const explore = useExplore(engine);
 
@@ -146,20 +179,34 @@ function Review({ game, analysis, engine }: { game: GameRecord; analysis: GameAn
   const view = views[index];
   const alts = view.review ? alternatives(view.review, moverOf(view.review.ply)) : [];
   const alt = chosen !== null ? alts[chosen]?.move ?? null : null;
+  const beforeView = index > 0 ? views[index - 1] : null;
+  // Показ варианта: позиция до хода с одной стрелкой.
+  const variant = !explore.active && alt !== null && beforeView !== null ? { alt, before: beforeView } : null;
   const nextMistake = nextUserMistake(analysis, game.userColor, index);
-  const fen = explore.active ? explore.fen : view.fen;
+  const fen = explore.active ? explore.fen : variant ? variant.before.fen : view.fen;
   const dests = useMemo(() => legalDests(fen), [fen]);
   const onMove = (uci: string) => {
-    if (explore.active) explore.move(uci);
-    else explore.start(view.fen, uci);
+    if (explore.active) {
+      explore.move(uci);
+      return;
+    }
+    const base = variant ? variant.before : view;
+    setStartScore(base.score);
+    setChosen(null);
+    explore.start(base.fen, uci);
   };
   const best = explore.best?.move;
-  const decor: Pick<BoardProps, 'lastMove' | 'lastMoveTone' | 'badge' | 'arrows'> = explore.active
-    ? {
+  let decor: Decor;
+  if (explore.active) {
+    decor = {
       lastMove: explore.lastMove, lastMoveTone: 'normal', badge: undefined,
-      arrows: best ? [{ from: best.slice(0, 2), to: best.slice(2, 4), tone: 'best' }] : [],
-    }
-    : boardDecor(view, alt);
+      arrows: best ? [arrow(best, 'best')] : [],
+    };
+  } else if (variant) {
+    decor = { lastMove: null, lastMoveTone: 'normal', badge: undefined, arrows: [arrow(variant.alt, 'alt')] };
+  } else {
+    decor = boardDecor(view, beforeView?.fen ?? null);
+  }
 
   return (
     <section className={explore.active ? 'review review--explore' : 'review'}>
@@ -168,7 +215,7 @@ function Review({ game, analysis, engine }: { game: GameRecord; analysis: GameAn
         <b className="review-title">Ты — {game.opponent} · {RESULT[game.result]}</b>
       </header>
       <div className="review-board">
-        <EvalBar score={explore.score ?? view.score} bottom={game.userColor} />
+        <EvalBar score={explore.active ? explore.score ?? startScore ?? view.score : view.score} bottom={game.userColor} />
         <div className="review-board-main">
           <Board
             fen={fen}
@@ -186,7 +233,7 @@ function Review({ game, analysis, engine }: { game: GameRecord; analysis: GameAn
       ) : (
         <MoveCard
           view={view}
-          beforeFen={index > 0 ? views[index - 1].fen : null}
+          beforeFen={beforeView?.fen ?? null}
           alts={alts}
           chosen={chosen}
           onChoose={setChosen}

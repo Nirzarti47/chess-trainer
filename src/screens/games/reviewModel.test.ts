@@ -1,6 +1,6 @@
 import type { AltMove, GameAnalysis, GameRecord, MoveReview, Score, SideSummary } from '../../domain/gameTypes';
 import { CONFIG } from '../../analysis/config';
-import { alternatives, badgeText, buildPlyViews, chartPoints, nextUserMistake } from './reviewModel';
+import { alternatives, badgeText, bestArrowVisible, buildPlyViews, chartPoints, nextUserMistake } from './reviewModel';
 
 // Детский мат: 1. e4 e5 2. Фh5 Кc6 3. Сc4 Кf6 4. Ф:f7#
 const MOVES = ['e2e4', 'e7e5', 'd1h5', 'b8c6', 'f1c4', 'g8f6', 'h5f7'];
@@ -94,5 +94,29 @@ describe('badgeText', () => {
     expect(badgeText(rv(0, { grade: 'blunder' }))).toBe('??');
     expect(badgeText(rv(0, { grade: 'best' }))).toBeNull();
     expect(badgeText(rv(0, { grade: 'good' }))).toBeNull();
+  });
+});
+
+describe('bestArrowVisible', () => {
+  const fenAt = (n: number) => buildPlyViews(game, analysis([]))[n].fen;
+
+  it('та же фигура ушла с поля «откуда» — стрелки нет', () => {
+    // 2. Фh5 сыграно, лучше было Фg4: ферзь с d1 уже ушёл.
+    expect(bestArrowVisible(fenAt(2), fenAt(3), 'd1g4')).toBe(false);
+  });
+
+  it('другая фигура, поле «откуда» не тронуто — стрелка есть', () => {
+    expect(bestArrowVisible(fenAt(2), fenAt(3), 'g1f3')).toBe(true);
+  });
+
+  it('на поле «откуда» после хода стоит другая фигура — стрелки нет', () => {
+    // Позиции подобраны вручную: до хода на c3 белый конь, после — белый слон.
+    const before = '4k3/8/8/8/8/2N5/8/4K3 w - - 0 1';
+    const after = '4k3/8/8/8/8/2B5/8/4K3 b - - 0 1';
+    expect(bestArrowVisible(before, after, 'c3d5')).toBe(false);
+  });
+
+  it('поле «откуда» пусто и до хода — стрелки нет', () => {
+    expect(bestArrowVisible(fenAt(0), fenAt(1), 'e5e6')).toBe(false);
   });
 });

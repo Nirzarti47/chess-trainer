@@ -29,7 +29,7 @@
 }
 
 .board cg-board square.hi-bad {
-  background: rgba(226, 92, 76, 0.55);
+  background: color-mix(in srgb, var(--grade-blunder) 55%, transparent);
 }
 
 .board cg-board square.selected {
@@ -129,7 +129,7 @@
 .board-badge--great { --tone: var(--grade-great); }
 .board-badge--best { --tone: var(--grade-best); }
 .board-badge--good { --tone: var(--grade-good); }
-.board-badge--inaccuracy { --tone: var(--grade-inaccuracy); }
+.board-badge--inaccuracy { --tone: var(--grade-inaccuracy); color: var(--bg); }
 .board-badge--mistake { --tone: var(--grade-mistake); }
 .board-badge--blunder { --tone: var(--grade-blunder); }
 

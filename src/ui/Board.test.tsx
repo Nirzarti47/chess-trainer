@@ -273,4 +273,21 @@ describe('Board: разбор партии', () => {
     expect(drawable.brushes.best.color).toBe('#63C29A');
     expect(drawable.brushes.alt.color).toBe('#5AA9D6');
   });
+
+  it('смена стрелок и тона подсветки у смонтированной доски обновляет их без пересоздания', async () => {
+    const props = { orientation: 'white' as const, dests: new Map(), interactive: false, onMove: () => {} };
+    const { rerender } = render(<Board {...props} fen={AFTER_E4} lastMove={['e2', 'e4']} arrows={[]} />);
+    const boardEl = document.querySelector('cg-board');
+    expect(document.querySelectorAll('cg-board square.hi-bad')).toHaveLength(0);
+    rerender(
+      <Board {...props} fen={AFTER_E4} lastMove={['e2', 'e4']} lastMoveTone="bad"
+        arrows={[{ from: 'g8', to: 'f6', tone: 'best' }]} />,
+    );
+    await settle();
+    const { drawable } = (cg.apis[0] as unknown as Api).state;
+    expect(drawable.autoShapes.map((x) => [x.orig, x.dest, x.brush])).toEqual([['g8', 'f6', 'best']]);
+    expect(document.querySelectorAll('cg-board square.hi-bad')).toHaveLength(2);
+    expect(document.querySelector('cg-board')).toBe(boardEl);
+    expect(cg.apis).toHaveLength(1);
+  });
 });

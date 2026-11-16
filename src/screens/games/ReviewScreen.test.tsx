@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Chess } from 'chess.js';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { CONFIG } from '../../analysis/config';
 import { formatScore } from '../../analysis/score';
 import { tableEngine } from '../../analysis/testEngine';
@@ -61,12 +61,20 @@ const analysis = (over: Partial<GameAnalysis> = {}): GameAnalysis => ({
 });
 
 function Where() {
-  return <p data-testid="where">{useLocation().pathname}</p>;
+  const navigate = useNavigate();
+  return (
+    <>
+      <p data-testid="where">{useLocation().pathname}</p>
+      <button type="button" onClick={() => navigate(-1)}>назад по истории</button>
+    </>
+  );
 }
 
-function renderReview(path = '/games/g1/review', engine: Pick<AnalysisEngine, 'analyse'> = tableEngine({})) {
+function renderReview(
+  path = '/games/g1/review', engine: Pick<AnalysisEngine, 'analyse'> = tableEngine({}), entries: string[] = [path],
+) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
       <Routes>
         <Route path="/games/:gameId/review" element={<ReviewScreen engine={engine} />} />
         <Route path="*" element={<Where />} />
@@ -77,6 +85,10 @@ function renderReview(path = '/games/g1/review', engine: Pick<AnalysisEngine, 'a
 
 const card = () => screen.getByTestId('move-card');
 const evalText = () => screen.getByLabelText('Перевес').textContent;
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 beforeEach(async () => {
   board.props = null;
@@ -132,11 +144,20 @@ describe('ReviewScreen', () => {
     expect(screen.getByRole('button', { name: 'Следующая ошибка' })).toHaveProperty('disabled', true);
   });
 
-  it('нажатие на вариант добавляет его стрелку', async () => {
+  it('нажатие на вариант показывает позицию до хода с его стрелкой', async () => {
     renderReview('/games/g1/review?ply=2');
-    fireEvent.click(await screen.findByRole('button', { name: /Кc3/ }));
-    expect(board.props!.arrows).toContainEqual({ from: 'b1', to: 'c3', tone: 'alt' });
-    expect(board.props!.arrows).toContainEqual({ from: 'g1', to: 'f3', tone: 'best' });
+    const button = await screen.findByRole('button', { name: /Кc3/ });
+    expect(board.props!.fen).toBe(fenAfter(3));
+    fireEvent.click(button);
+    expect(board.props!.fen).toBe(fenAfter(2));
+    expect(board.props!.arrows).toEqual([{ from: 'b1', to: 'c3', tone: 'alt' }]);
+    expect(board.props!.badge).toBeUndefined();
+    expect(board.props!.lastMove).toBeNull();
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(button.className).toContain('move-card-alt--on');
+    // Карточка хода и шкала остаются прежними.
+    expect(within(card()).getByText('2. Фh5')).toBeTruthy();
+    expect(evalText()).toBe(formatScore(SCORES[3]));
   });
 
   it('?ply=N открывает позицию после хода N', async () => {
@@ -228,20 +249,20 @@ describe('ReviewScreen: свой вариант', () => {
     expect(engine.calls).toEqual([{ fen: fenAfter(0, 'd2d4'), nodes: CONFIG.EXPLORE_NODES, multipv: 1 }]);
   });
 
-  it('«Вернуться к партии» возвращает карточку исходного хода и выбранный вариант', async () => {
+  it('«Вернуться к партии» возвращает карточку исходного хода без выбранного варианта', async () => {
     renderReview('/games/g1/review?ply=2');
     fireEvent.click(await screen.findByRole('button', { name: /Кc3/ }));
-    playOnBoard('g7g6');
+    playOnBoard('g1f3');
     expect(screen.queryByTestId('move-card')).toBeNull();
     await screen.findByText(/Лучший ход:/);
     fireEvent.click(screen.getByRole('button', { name: 'Вернуться к партии' }));
     expect(screen.queryByText('Свой вариант')).toBeNull();
     expect(within(card()).getByText('2. Фh5')).toBeTruthy();
-    expect(within(card()).getByRole('button', { name: /Кc3/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(card()).getByRole('button', { name: /Кc3/ }).getAttribute('aria-pressed')).toBe('false');
     expect(board.props!.fen).toBe(fenAfter(3));
     expect(board.props!.lastMove).toEqual(['d1', 'h5']);
     expect(board.props!.badge).toEqual({ square: 'h5', text: '?', tone: 'mistake' });
-    expect(board.props!.arrows).toContainEqual({ from: 'b1', to: 'c3', tone: 'alt' });
+    expect(board.props!.arrows).toEqual([{ from: 'g1', to: 'f3', tone: 'best' }]);
     expect(evalText()).toBe(formatScore(SCORES[3]));
     expect(screen.getByRole('button', { name: 'Следующий ход' })).toBeTruthy();
   });
@@ -309,6 +330,99 @@ describe('ReviewScreen: свой вариант', () => {
   });
 });
 
+describe('ReviewScreen: вариант на доске', () => {
+  // Лучший ход Фg4 — той же фигурой, что сыграна (Фh5); вторым вариантом идёт сыгранный Фh5.
+  const same = analysis({
+    moves: analysis().moves.map((m) => (m.ply === 2 ? { ...m, best: [alt('d1g4', 40), alt('d1h5', 30)] } : m)),
+  });
+  beforeEach(async () => {
+    await putGames([game()]);
+    await saveAnalysis(same, { put: [], removeIds: [] });
+  });
+
+  it('лучший ход той же фигурой, что сыграна — на позиции после хода зелёной стрелки нет', async () => {
+    renderReview('/games/g1/review?ply=2');
+    await screen.findByRole('button', { name: /Фg4/ });
+    expect(board.props!.fen).toBe(fenAfter(3));
+    expect(board.props!.arrows).toEqual([]);
+    expect(board.props!.badge).toEqual({ square: 'h5', text: '?', tone: 'mistake' });
+  });
+
+  it('вариант: доска до хода, одна стрелка alt, без значка и подсветки; повторное нажатие снимает выбор', async () => {
+    renderReview('/games/g1/review?ply=2');
+    const button = await screen.findByRole('button', { name: /Фg4/ });
+    fireEvent.click(button);
+    expect(board.props!.fen).toBe(fenAfter(2));
+    expect(board.props!.arrows).toEqual([{ from: 'd1', to: 'g4', tone: 'alt' }]);
+    expect(board.props!.badge).toBeUndefined();
+    expect(board.props!.lastMove).toBeNull();
+    expect(board.props!.lastMoveTone).toBe('normal');
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(evalText()).toBe(formatScore(SCORES[3]));
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(board.props!.fen).toBe(fenAfter(3));
+    expect(board.props!.badge).toEqual({ square: 'h5', text: '?', tone: 'mistake' });
+    expect(board.props!.lastMove).toEqual(['d1', 'h5']);
+    expect(board.props!.arrows).toEqual([]);
+  });
+
+  it('вариант, совпадающий с сыгранным ходом, тоже показывается до хода; другой вариант переключает', async () => {
+    renderReview('/games/g1/review?ply=2');
+    const played = await screen.findByRole('button', { name: /Фh5/ });
+    const better = screen.getByRole('button', { name: /Фg4/ });
+    fireEvent.click(played);
+    expect(board.props!.fen).toBe(fenAfter(2));
+    expect(board.props!.arrows).toEqual([{ from: 'd1', to: 'h5', tone: 'alt' }]);
+    expect(board.props!.badge).toBeUndefined();
+    fireEvent.click(better);
+    expect(played.getAttribute('aria-pressed')).toBe('false');
+    expect(better.getAttribute('aria-pressed')).toBe('true');
+    expect(board.props!.arrows).toEqual([{ from: 'd1', to: 'g4', tone: 'alt' }]);
+  });
+
+  it('перемотка снимает выбор варианта', async () => {
+    renderReview('/games/g1/review?ply=2');
+    fireEvent.click(await screen.findByRole('button', { name: /Фg4/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Следующий ход' }));
+    expect(board.props!.fen).toBe(fenAfter(4));
+    fireEvent.click(screen.getByRole('button', { name: 'Предыдущий ход' }));
+    expect(within(card()).getByRole('button', { name: /Фg4/ }).getAttribute('aria-pressed')).toBe('false');
+    expect(board.props!.fen).toBe(fenAfter(3));
+    expect(board.props!.arrows).toEqual([]);
+  });
+
+  it('ход на доске в показе варианта запускает «Свой вариант» от позиции до хода', async () => {
+    const engine = tableEngine({});
+    renderReview('/games/g1/review?ply=2', engine);
+    fireEvent.click(await screen.findByRole('button', { name: /Фg4/ }));
+    expect(board.props!.interactive).toBe(true);
+    expect(board.props!.dests.get('g1')).toContain('f3');
+    playOnBoard('g1f3');
+    expect(board.props!.fen).toBe(fenAfter(2, 'g1f3'));
+    expect(screen.getByText('Свой вариант')).toBeTruthy();
+    // Пока движок считает, шкала держит оценку позиции до хода.
+    expect(evalText()).toBe(formatScore(SCORES[2]));
+    await screen.findByText(/Лучший ход:/);
+    expect(engine.calls.map((c) => c.fen)).toEqual([fenAfter(2, 'g1f3')]);
+    fireEvent.click(screen.getByRole('button', { name: 'Вернуться к партии' }));
+    expect(within(card()).getByText('2. Фh5')).toBeTruthy();
+    expect(within(card()).getByRole('button', { name: /Фg4/ }).getAttribute('aria-pressed')).toBe('false');
+    expect(board.props!.fen).toBe(fenAfter(3));
+    expect(evalText()).toBe(formatScore(SCORES[3]));
+  });
+
+  it('«Шаг назад» с первого хода своего варианта возвращает позицию после хода без выбора', async () => {
+    renderReview('/games/g1/review?ply=2');
+    fireEvent.click(await screen.findByRole('button', { name: /Фg4/ }));
+    playOnBoard('g1f3');
+    await screen.findByText(/Лучший ход:/);
+    fireEvent.click(screen.getByRole('button', { name: 'Шаг назад' }));
+    expect(board.props!.fen).toBe(fenAfter(3));
+    expect(within(card()).getByRole('button', { name: /Фg4/ }).getAttribute('aria-pressed')).toBe('false');
+  });
+});
+
 describe('ReviewScreen: партия чёрными', () => {
   it('доска и шкала повёрнуты цветом владельца вниз', async () => {
     await putGames([game({ userColor: 'black' })]);
@@ -328,17 +442,41 @@ describe('ReviewScreen: нет данных', () => {
     expect(screen.getByTestId('where').textContent).toBe('/games');
   });
 
-  it('разбора нет — переход на сводку', async () => {
+  it('разбора нет — переход на сводку с заменой записи истории', async () => {
     await putGames([game()]);
-    renderReview();
+    renderReview('/games/g1/review', tableEngine({}), ['/games', '/games/g1/review']);
     expect((await screen.findByTestId('where')).textContent).toBe('/games/g1');
+    // Запись разбора заменена: шаг назад ведёт мимо неё.
+    fireEvent.click(screen.getByRole('button', { name: 'назад по истории' }));
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/games'));
   });
 
-  it('разбор устарел — переход на сводку', async () => {
+  it('разбор устарел — переход на сводку с заменой записи истории', async () => {
     await putGames([game()]);
     await saveAnalysis(analysis({ rulesVersion: CONFIG.RULES_VERSION - 1 }), { put: [], removeIds: [] });
-    renderReview();
+    renderReview('/games/g1/review', tableEngine({}), ['/games', '/games/g1/review']);
     expect((await screen.findByTestId('where')).textContent).toBe('/games/g1');
+    fireEvent.click(screen.getByRole('button', { name: 'назад по истории' }));
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/games'));
+  });
+
+  it('испорченная партия (недопустимый ход) — свой текст и «К партии»', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await putGames([game({ moves: ['e2e5'] })]);
+    await saveAnalysis(analysis({ scores: SCORES.slice(0, 2), moves: [] }), { put: [], removeIds: [] });
+    renderReview();
+    expect(await screen.findByText('Не удалось показать разбор этой партии')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'К партии' }));
+    expect(screen.getByTestId('where').textContent).toBe('/games/g1');
+  });
+
+  it('число оценок не сходится с числом ходов — свой текст и «К партии»', async () => {
+    await putGames([game()]);
+    await saveAnalysis(analysis({ scores: SCORES.slice(0, 5) }), { put: [], removeIds: [] });
+    renderReview();
+    expect(await screen.findByText('Не удалось показать разбор этой партии')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'К партии' }));
+    expect(screen.getByTestId('where').textContent).toBe('/games/g1');
   });
 
   it('сбой чтения базы — свой текст', async () => {
@@ -347,6 +485,5 @@ describe('ReviewScreen: нет данных', () => {
     renderReview();
     expect(await screen.findByText('Не удалось открыть разбор')).toBeTruthy();
     expect(screen.getByText(/Unable to open/)).toBeTruthy();
-    vi.restoreAllMocks();
   });
 });

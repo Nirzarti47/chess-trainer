@@ -1,4 +1,4 @@
-import { Chess } from 'chess.js';
+import { Chess, type Square } from 'chess.js';
 import { CONFIG } from '../../analysis/config';
 import { moveLabel } from '../../analysis/notation';
 import { expected } from '../../analysis/score';
@@ -59,3 +59,11 @@ const BADGE: Partial<Record<NonNullable<MoveReview['mark']> | MoveReview['grade'
 };
 
 export const badgeText = (r: MoveReview): string | null => BADGE[r.mark ?? r.grade] ?? null;
+
+/** Стрелка лучшего хода на позиции после сыгранного: только если на поле «откуда» стоит та же фигура, что до хода. */
+export function bestArrowVisible(beforeFen: string, afterFen: string, bestUci: string): boolean {
+  const from = bestUci.slice(0, 2) as Square;
+  const was = new Chess(beforeFen).get(from);
+  const now = new Chess(afterFen).get(from);
+  return !!was && !!now && was.type === now.type && was.color === now.color;
+}
