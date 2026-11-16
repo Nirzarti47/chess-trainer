@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { BackupError, exportBackup, importBackup } from '../data/backup';
 import { markBackupDone } from '../data/repo';
 import { localDay } from '../domain/dates';
+import { gamesQueue } from '../games/gamesStore';
 import { BigButton } from '../ui/BigButton';
 import { Sheet } from '../ui/Sheet';
 import './ProfileScreen.css';
@@ -117,6 +118,8 @@ export function BackupScreen({ reload = () => window.location.reload() }: { relo
       await importBackup(await file.text());
       // Восстановленное состояние и есть содержимое файла: напоминание о копии считается от сейчас.
       await markBackupDone(new Date()).catch((e: unknown) => console.error('Не удалось отметить копию', e));
+      // Набор партий и задач мог измениться: очередь разбора перечитывает базу. Сбой не отменяет восстановление.
+      await gamesQueue.refresh().catch((e: unknown) => console.error('Не удалось обновить партии', e));
       setStatus({ kind: 'ok', text: 'Прогресс восстановлен' });
       // Перезагрузка — чтобы все экраны и настройки прочитали восстановленные данные.
       setTimeout(reload, RELOAD_DELAY_MS);

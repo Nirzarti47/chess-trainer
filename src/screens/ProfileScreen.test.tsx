@@ -5,6 +5,7 @@ import { PIECE_SETS } from '../content/pieceSets';
 import { exportBackup } from '../data/backup';
 import { ChessComError } from '../chesscom/api';
 import { db } from '../data/db';
+import { gamesQueue } from '../games/gamesStore';
 import { setChessUser } from '../data/gamesRepo';
 import { getProfile } from '../data/repo';
 import { addDays, localDay } from '../domain/dates';
@@ -358,12 +359,33 @@ describe('BackupScreen: восстановление', () => {
     await waitFor(() => expect(reload).toHaveBeenCalledTimes(1), { timeout: RELOAD_DELAY_MS + 1000 });
   });
 
+  it('после успешного восстановления партии перечитываются; сбой перечитывания не ломает восстановление', async () => {
+    const copy = await (await exportBackup()).text();
+    const refresh = vi.spyOn(gamesQueue, 'refresh').mockRejectedValue(new Error('сбой'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      renderAt('/profile/backup');
+      await chooseFile(copy);
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Заменить' }));
+      expect(await screen.findByText('Прогресс восстановлен')).toBeTruthy();
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('alert')).toBeNull();
+      await waitFor(() => expect(reload).toHaveBeenCalledTimes(1), { timeout: RELOAD_DELAY_MS + 1000 });
+    } finally {
+      refresh.mockRestore();
+      log.mockRestore();
+    }
+  });
+
   it('ошибка импорта выводит сообщение и не меняет данные', async () => {
+    const refresh = vi.spyOn(gamesQueue, 'refresh').mockResolvedValue();
     await setProfile({ xp: 300 });
     renderAt('/profile/backup');
     await chooseFile('{"app":"другое"}');
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Заменить' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Это не файл резервной копии');
+    expect(refresh).not.toHaveBeenCalled();
+    refresh.mockRestore();
     expect((await getProfile()).xp).toBe(300);
     expect(screen.queryByText('Прогресс восстановлен')).toBeNull();
     await new Promise((r) => setTimeout(r, RELOAD_DELAY_MS + 100));
