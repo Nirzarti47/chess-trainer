@@ -2,6 +2,7 @@ import { Chess, type Move, type PieceSymbol } from 'chess.js';
 import type { AltMove, MistakeKind, Score, Side } from '../domain/gameTypes';
 import { CONFIG } from './config';
 import { PIECE_VALUE, see, swing } from './material';
+import { OTHER_PHRASE } from './phrases';
 
 type Result = { kind: MistakeKind; phrase: string };
 
@@ -138,5 +139,5 @@ export function classifyMistake(a: { fenBefore: string; played: string; best: Al
     if (fork) return { kind: 'missedFork', phrase: fork };
   }
 
-  return { kind: 'other', phrase: 'Лучше было сыграть так' };
+  return { kind: 'other', phrase: OTHER_PHRASE };
 }

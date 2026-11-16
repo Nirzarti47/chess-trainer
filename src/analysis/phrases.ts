@@ -7,6 +7,9 @@ export const GRADE_TITLE: Record<Grade, string> = {
 
 export const MARK_TITLE: Record<Mark, string> = { brilliant: 'Блестящий ход', great: 'Сильный ход' };
 
+/** Фраза к ошибке, у которой вид не определён. */
+export const OTHER_PHRASE = 'Лучше было сыграть так';
+
 /** Названия видов для экрана «Частые ошибки». */
 export const KIND_TITLE: Record<MistakeKind, string> = {
   missedMate: 'Пропущен мат',
