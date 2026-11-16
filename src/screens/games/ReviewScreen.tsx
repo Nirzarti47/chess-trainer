@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { formatScore } from '../../analysis/score';
 import { getCurrentAnalysis, getGame } from '../../data/gamesRepo';
 import type { GameAnalysis, GameRecord } from '../../domain/gameTypes';
+import { legalDests } from '../../domain/puzzle';
+import { analysisEngine, type AnalysisEngine } from '../../engine/analysisEngine';
 import { BigButton } from '../../ui/BigButton';
 import { Board, type BoardArrow, type BoardProps } from '../../ui/Board';
 import { describeError } from '../lessonErrors';
 import { EvalBar } from './EvalBar';
 import { GameChart } from './GameChart';
 import { RESULT } from './GamesScreen';
-import { MoveCard } from './MoveCard';
+import { MoveCard, ruMove } from './MoveCard';
 import { alternatives, badgeText, buildPlyViews, chartPoints, moverOf, nextUserMistake, type PlyView } from './reviewModel';
+import { useExplore, type ExploreState } from './useExplore';
 import './ReviewScreen.css';
 
 type Phase =
@@ -18,7 +22,7 @@ type Phase =
   | { kind: 'dbError'; text: string }
   | { kind: 'ready'; game: GameRecord; analysis: GameAnalysis };
 
-const NO_DESTS = new Map<string, string[]>();
+type Engine = Pick<AnalysisEngine, 'analyse'>;
 
 /** Номер позиции из ?ply=N (позиция после хода N), прижатый к допустимым. */
 function startIndex(param: string | null, count: number): number {
@@ -45,8 +49,33 @@ function boardDecor(view: PlyView, alt: string | null): Pick<BoardProps, 'lastMo
   };
 }
 
-/** Разбор партии: доска со шкалой, карточка хода, график и переходы по ходам. */
-export function ReviewScreen() {
+/** Карточка «Свой вариант»: оценка движка для позиции варианта и его лучший ход. */
+function ExploreCard({ explore }: { explore: ExploreState }) {
+  const { score, best } = explore;
+  let body: ReactNode;
+  if (explore.thinking) body = <p className="explore-card-note">Считаю…</p>;
+  else if (explore.failed) body = <p className="explore-card-note">Движок не ответил</p>;
+  else if (score && 'over' in score) body = <p className="explore-card-end">{score.over === 'draw' ? 'Пат' : 'Мат'}</p>;
+  else {
+    body = (
+      <>
+        {score && <p className="explore-card-score">{formatScore(score)}</p>}
+        {best && <p>Лучший ход: {ruMove(explore.fen, best.move)}</p>}
+      </>
+    );
+  }
+  return (
+    <div className="move-card explore-card" data-testid="explore-card">
+      <p className="move-card-head">
+        <span className="move-card-grade explore-card-tag">Свой вариант</span>
+      </p>
+      {body}
+    </div>
+  );
+}
+
+/** Разбор партии: доска со шкалой, карточка хода, график и переходы по ходам; можно пробовать свои ходы. */
+export function ReviewScreen({ engine = analysisEngine }: { engine?: Engine }) {
   const { gameId = '' } = useParams();
   const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
@@ -95,18 +124,21 @@ export function ReviewScreen() {
     );
   }
 
-  return <Review key={phase.game.id} game={phase.game} analysis={phase.analysis} />;
+  return <Review key={phase.game.id} game={phase.game} analysis={phase.analysis} engine={engine} />;
 }
 
-function Review({ game, analysis }: { game: GameRecord; analysis: GameAnalysis }) {
+function Review({ game, analysis, engine }: { game: GameRecord; analysis: GameAnalysis; engine: Engine }) {
   const [params] = useSearchParams();
   const views = useMemo(() => buildPlyViews(game, analysis), [game, analysis]);
   const points = useMemo(() => chartPoints(analysis), [analysis]);
   // Текущая позиция — единственное состояние перемотки; адрес при перемотке не меняется.
   const [index, setIndex] = useState(() => startIndex(params.get('ply'), views.length));
   const [chosen, setChosen] = useState<number | null>(null);
+  // «Свой вариант»: пока он открыт, позиция и карточка партии не меняются.
+  const explore = useExplore(engine);
 
   const go = (i: number) => {
+    if (explore.active) return;
     setIndex(i);
     setChosen(null);
   };
@@ -115,48 +147,73 @@ function Review({ game, analysis }: { game: GameRecord; analysis: GameAnalysis }
   const alts = view.review ? alternatives(view.review, moverOf(view.review.ply)) : [];
   const alt = chosen !== null ? alts[chosen]?.move ?? null : null;
   const nextMistake = nextUserMistake(analysis, game.userColor, index);
+  const fen = explore.active ? explore.fen : view.fen;
+  const dests = useMemo(() => legalDests(fen), [fen]);
+  const onMove = (uci: string) => {
+    if (explore.active) explore.move(uci);
+    else explore.start(view.fen, uci);
+  };
+  const best = explore.best?.move;
+  const decor: Pick<BoardProps, 'lastMove' | 'lastMoveTone' | 'badge' | 'arrows'> = explore.active
+    ? {
+      lastMove: explore.lastMove, lastMoveTone: 'normal', badge: undefined,
+      arrows: best ? [{ from: best.slice(0, 2), to: best.slice(2, 4), tone: 'best' }] : [],
+    }
+    : boardDecor(view, alt);
 
   return (
-    <section className="review">
+    <section className={explore.active ? 'review review--explore' : 'review'}>
       <header className="review-head">
         <Link to={`/games/${game.id}`} className="review-back">‹ Партии</Link>
         <b className="review-title">Ты — {game.opponent} · {RESULT[game.result]}</b>
       </header>
       <div className="review-board">
-        <EvalBar score={view.score} bottom={game.userColor} />
+        <EvalBar score={explore.score ?? view.score} bottom={game.userColor} />
         <div className="review-board-main">
           <Board
-            fen={view.fen}
+            fen={fen}
             orientation={game.userColor}
-            dests={NO_DESTS}
-            interactive={false}
-            onMove={() => {}}
-            {...boardDecor(view, alt)}
+            dests={dests}
+            interactive={dests.size > 0}
+            autoQueen
+            onMove={onMove}
+            {...decor}
           />
         </div>
       </div>
-      <MoveCard
-        view={view}
-        beforeFen={index > 0 ? views[index - 1].fen : null}
-        alts={alts}
-        chosen={chosen}
-        onChoose={setChosen}
-      />
+      {explore.active ? (
+        <ExploreCard explore={explore} />
+      ) : (
+        <MoveCard
+          view={view}
+          beforeFen={index > 0 ? views[index - 1].fen : null}
+          alts={alts}
+          chosen={chosen}
+          onChoose={setChosen}
+        />
+      )}
       <GameChart points={points} reviews={analysis.moves} userColor={game.userColor} current={index} onSelect={go} />
-      <div className="review-actions">
-        <BigButton variant="surface" aria-label="Предыдущий ход" disabled={index === 0} onClick={() => go(index - 1)}>◀</BigButton>
-        <BigButton className="review-main" disabled={nextMistake === null} onClick={() => nextMistake !== null && go(nextMistake)}>
-          Следующая ошибка
-        </BigButton>
-        <BigButton
-          variant="surface"
-          aria-label="Следующий ход"
-          disabled={index === views.length - 1}
-          onClick={() => go(index + 1)}
-        >
-          ▶
-        </BigButton>
-      </div>
+      {explore.active ? (
+        <div className="review-actions">
+          <BigButton variant="surface" onClick={explore.back}>Шаг назад</BigButton>
+          <BigButton className="review-main" onClick={explore.exit}>Вернуться к партии</BigButton>
+        </div>
+      ) : (
+        <div className="review-actions">
+          <BigButton variant="surface" aria-label="Предыдущий ход" disabled={index === 0} onClick={() => go(index - 1)}>◀</BigButton>
+          <BigButton className="review-main" disabled={nextMistake === null} onClick={() => nextMistake !== null && go(nextMistake)}>
+            Следующая ошибка
+          </BigButton>
+          <BigButton
+            variant="surface"
+            aria-label="Следующий ход"
+            disabled={index === views.length - 1}
+            onClick={() => go(index + 1)}
+          >
+            ▶
+          </BigButton>
+        </div>
+      )}
     </section>
   );
 }

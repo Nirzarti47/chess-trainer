@@ -24,6 +24,8 @@ export interface BoardProps {
   /** Значок оценки хода в углу поля. */
   badge?: { square: string; text: string; tone: Grade | Mark };
   interactive: boolean;
+  /** Превращение пешки сразу в ферзя, без окна выбора. */
+  autoQueen?: boolean;
   /** Ход пользователя в UCI; при превращении с буквой фигуры: 'e7e8q'. */
   onMove(uci: string): void;
 }
@@ -80,12 +82,13 @@ function squarePosition(square: string, orientation: 'white' | 'black') {
 /** Шахматная доска на chessground. Позицию задаёт только fen: ход пользователя уходит в onMove,
  *  а если родитель не сменил fen (неверный ход), доска возвращает прежнюю позицию. */
 export function Board({
-  fen, orientation, dests, lastMove, highlight = [], arrows = [], lastMoveTone = 'normal', badge, interactive, onMove,
+  fen, orientation, dests, lastMove, highlight = [], arrows = [], lastMoveTone = 'normal', badge, interactive, autoQueen = false, onMove,
 }: BoardProps) {
   const { settings } = useSettings();
   const elRef = useRef<HTMLDivElement>(null);
   const apiRef = useRef<Api | null>(null);
   const onMoveRef = useRef(onMove);
+  const autoQueenRef = useRef(autoQueen);
   const [promotion, setPromotion] = useState<PendingPromotion | null>(null);
   // Увеличивается после каждого хода пользователя, чтобы заново выставить позицию из fen.
   const [moveCount, setMoveCount] = useState(0);
@@ -95,6 +98,7 @@ export function Board({
 
   useLayoutEffect(() => {
     onMoveRef.current = onMove;
+    autoQueenRef.current = autoQueen;
     propsRef.current = { fen, orientation, dests, lastMove, highlight, arrows, lastMoveTone, interactive };
   });
 
@@ -124,7 +128,8 @@ export function Board({
           after: (orig, dest) => {
             const piece = apiRef.current?.state.pieces.get(dest);
             if (piece?.role === 'pawn' && (dest[1] === '1' || dest[1] === '8')) {
-              setPromotion({ orig, dest, color: piece.color });
+              if (autoQueenRef.current) finishMove(orig + dest + 'q');
+              else setPromotion({ orig, dest, color: piece.color });
             } else {
               finishMove(orig + dest);
             }

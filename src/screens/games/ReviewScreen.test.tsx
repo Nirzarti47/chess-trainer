@@ -1,11 +1,14 @@
 import 'fake-indexeddb/auto';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { Chess } from 'chess.js';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { CONFIG } from '../../analysis/config';
 import { formatScore } from '../../analysis/score';
+import { tableEngine } from '../../analysis/testEngine';
 import { db } from '../../data/db';
 import { putGames, saveAnalysis } from '../../data/gamesRepo';
 import type { AltMove, GameAnalysis, GameRecord, MoveReview, Score, SideSummary } from '../../domain/gameTypes';
+import type { AnalysisEngine } from '../../engine/analysisEngine';
 import type { BoardProps } from '../../ui/Board';
 import { ReviewScreen } from './ReviewScreen';
 
@@ -61,11 +64,11 @@ function Where() {
   return <p data-testid="where">{useLocation().pathname}</p>;
 }
 
-function renderReview(path = '/games/g1/review') {
+function renderReview(path = '/games/g1/review', engine: Pick<AnalysisEngine, 'analyse'> = tableEngine({})) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="/games/:gameId/review" element={<ReviewScreen />} />
+        <Route path="/games/:gameId/review" element={<ReviewScreen engine={engine} />} />
         <Route path="*" element={<Where />} />
       </Routes>
     </MemoryRouter>,
@@ -93,7 +96,9 @@ describe('ReviewScreen', () => {
     expect(screen.getByText(/Ты — rival_one/)).toBeTruthy();
     expect(board.props!.lastMove).toBeNull();
     expect(board.props!.orientation).toBe('white');
-    expect(board.props!.interactive).toBe(false);
+    // Пробовать свои ходы можно с любой позиции, где есть ходы, включая начальную.
+    expect(board.props!.interactive).toBe(true);
+    expect(board.props!.dests.get('e2')).toEqual(['e3', 'e4']);
     expect(screen.getByRole('button', { name: 'Предыдущий ход' })).toHaveProperty('disabled', true);
   });
 
@@ -175,6 +180,132 @@ describe('ReviewScreen', () => {
     renderReview();
     fireEvent.click(await screen.findByRole('link', { name: /Партии/ }));
     expect(screen.getByTestId('where').textContent).toBe('/games/g1');
+  });
+});
+
+// Позиция после хода N партии (как на экране).
+const fenAfter = (n: number, ...extra: string[]) => {
+  const chess = new Chess();
+  for (const m of [...MOVES.slice(0, n), ...extra]) chess.move({ from: m.slice(0, 2), to: m.slice(2, 4), promotion: m[4] });
+  return chess.fen();
+};
+const playOnBoard = (uci: string) => act(() => board.props!.onMove(uci));
+
+describe('ReviewScreen: свой вариант', () => {
+  beforeEach(async () => {
+    await putGames([game()]);
+    await saveAnalysis(analysis(), { put: [], removeIds: [] });
+  });
+
+  it('ход на доске включает «Свой вариант»: плашка, «Считаю…», потом оценка, лучший ход и стрелка', async () => {
+    const engine = tableEngine({ [fenAfter(0, 'd2d4')]: [{ move: 'g8f6', score: { cp: 50 }, pv: ['g8f6'] }] });
+    renderReview('/games/g1/review', engine);
+    await screen.findByText('Начало партии');
+    playOnBoard('d2d4');
+    expect(screen.getByText('Свой вариант')).toBeTruthy();
+    expect(screen.getByText('Считаю…')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Шаг назад' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Вернуться к партии' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Следующая ошибка' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Следующий ход' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Предыдущий ход' })).toBeNull();
+    // Пока идёт счёт — шкала держит оценку позиции, с которой ушли.
+    expect(evalText()).toBe(formatScore(SCORES[0]));
+    expect(board.props!.fen).toBe(fenAfter(0, 'd2d4'));
+    expect(board.props!.lastMove).toEqual(['d2', 'd4']);
+    expect(board.props!.lastMoveTone).toBe('normal');
+    expect(board.props!.badge).toBeUndefined();
+    expect(board.props!.arrows).toEqual([]);
+    expect(board.props!.interactive).toBe(true);
+    expect(board.props!.dests.get('g8')).toEqual(['h6', 'f6']);
+
+    expect(await screen.findByText('Лучший ход: Кf6')).toBeTruthy();
+    expect(screen.queryByText('Считаю…')).toBeNull();
+    // Движок дал +0,5 глазами чёрных — для белых это −0,5.
+    expect(screen.getByTestId('explore-card').textContent).toContain(formatScore({ cp: -50 }));
+    expect(evalText()).toBe(formatScore({ cp: -50 }));
+    expect(board.props!.arrows).toEqual([{ from: 'g8', to: 'f6', tone: 'best' }]);
+    expect(engine.calls).toEqual([{ fen: fenAfter(0, 'd2d4'), nodes: CONFIG.EXPLORE_NODES, multipv: 1 }]);
+  });
+
+  it('«Вернуться к партии» возвращает карточку исходного хода и выбранный вариант', async () => {
+    renderReview('/games/g1/review?ply=2');
+    fireEvent.click(await screen.findByRole('button', { name: /Кc3/ }));
+    playOnBoard('g7g6');
+    expect(screen.queryByTestId('move-card')).toBeNull();
+    await screen.findByText(/Лучший ход:/);
+    fireEvent.click(screen.getByRole('button', { name: 'Вернуться к партии' }));
+    expect(screen.queryByText('Свой вариант')).toBeNull();
+    expect(within(card()).getByText('2. Фh5')).toBeTruthy();
+    expect(within(card()).getByRole('button', { name: /Кc3/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(board.props!.fen).toBe(fenAfter(3));
+    expect(board.props!.lastMove).toEqual(['d1', 'h5']);
+    expect(board.props!.badge).toEqual({ square: 'h5', text: '?', tone: 'mistake' });
+    expect(board.props!.arrows).toContainEqual({ from: 'b1', to: 'c3', tone: 'alt' });
+    expect(evalText()).toBe(formatScore(SCORES[3]));
+    expect(screen.getByRole('button', { name: 'Следующий ход' })).toBeTruthy();
+  });
+
+  it('«Шаг назад» ведёт по варианту назад, с первого хода — к партии', async () => {
+    renderReview();
+    await screen.findByText('Начало партии');
+    playOnBoard('d2d4');
+    await screen.findByText(/Лучший ход:/);
+    playOnBoard('d7d5');
+    await screen.findByText(/Лучший ход:/);
+    expect(board.props!.fen).toBe(fenAfter(0, 'd2d4', 'd7d5'));
+    fireEvent.click(screen.getByRole('button', { name: 'Шаг назад' }));
+    expect(board.props!.fen).toBe(fenAfter(0, 'd2d4'));
+    expect(screen.getByText('Свой вариант')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Шаг назад' }));
+    expect(screen.queryByText('Свой вариант')).toBeNull();
+    expect(screen.getByText('Начало партии')).toBeTruthy();
+    expect(board.props!.fen).toBe(fenAfter(0));
+  });
+
+  it('движок не ответил — свой текст, доска остаётся рабочей', async () => {
+    renderReview('/games/g1/review', { analyse: async () => null });
+    await screen.findByText('Начало партии');
+    playOnBoard('e2e4');
+    expect(await screen.findByText('Движок не ответил')).toBeTruthy();
+    expect(board.props!.interactive).toBe(true);
+    playOnBoard('e7e5');
+    expect(board.props!.fen).toBe(fenAfter(0, 'e2e4', 'e7e5'));
+    await screen.findByText('Движок не ответил');
+  });
+
+  it('график в режиме не перематывает партию', async () => {
+    renderReview();
+    await screen.findByText('Начало партии');
+    playOnBoard('e2e4');
+    await screen.findByText(/Лучший ход:/);
+    fireEvent.pointerDown(screen.getByRole('slider', { name: 'График партии' }), { clientX: 399, pointerId: 1 });
+    expect(screen.getByText('Свой вариант')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Вернуться к партии' }));
+    expect(screen.getByText('Начало партии')).toBeTruthy();
+  });
+
+  it('мат в своём варианте — «Мат», движок не спрашивается', async () => {
+    const engine = tableEngine({});
+    // После 3… Кf6 у белых есть мат Ф:f7.
+    renderReview('/games/g1/review?ply=5', engine);
+    await screen.findByText('3… Кf6');
+    playOnBoard('h5f7');
+    expect(await screen.findByText('Мат')).toBeTruthy();
+    expect(board.props!.interactive).toBe(false);
+    expect(engine.calls).toEqual([]);
+  });
+
+  it('превращение в своём варианте — всегда в ферзя', async () => {
+    renderReview();
+    await screen.findByText('Начало партии');
+    expect(board.props!.autoQueen).toBe(true);
+  });
+
+  it('на последней позиции партии (мат) доска не интерактивна', async () => {
+    renderReview('/games/g1/review?ply=6');
+    await screen.findByText('4. Ф:f7#');
+    expect(board.props!.interactive).toBe(false);
   });
 });
 

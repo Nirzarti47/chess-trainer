@@ -240,3 +240,15 @@
 
 .review-actions .big-button { flex: 1; }
 .review-actions .review-main { flex: 2; }
+
+/* «Свой вариант»: плашка в карточке, график партии неактивен. */
+.explore-card-tag { background: var(--weak); }
+.explore-card-note { margin-top: 6px !important; color: var(--muted); }
+.explore-card-score { margin-top: 6px !important; font-size: 18px; font-weight: 700; }
+.explore-card-end { margin-top: 6px !important; font-size: 16px; font-weight: 700; }
+.explore-card p + p { margin-top: 4px; }
+
+.review--explore .game-chart {
+  opacity: 0.4;
+  pointer-events: none;
+}

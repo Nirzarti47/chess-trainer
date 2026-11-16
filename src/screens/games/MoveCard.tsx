@@ -6,7 +6,7 @@ import type { AltMove } from '../../domain/gameTypes';
 import type { PlyView } from './reviewModel';
 
 /** Ход в UCI из позиции fen → русская запись. */
-function ruMove(fen: string, uci: string): string {
+export function ruMove(fen: string, uci: string): string {
   try {
     return ruSan(new Chess(fen).move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }).san);
   } catch {

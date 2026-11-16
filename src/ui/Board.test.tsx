@@ -135,6 +135,18 @@ describe('Board: ходы', () => {
     expect(screen.queryByRole('button', { name: 'Ферзь' })).toBeNull();
   });
 
+  it('превращение с autoQueen: сразу ферзь, без выбора', async () => {
+    const fen = '8/P6k/8/8/8/8/8/K7 w - - 0 1';
+    const onMove = vi.fn();
+    render(<Board fen={fen} orientation="white" dests={legalDests(fen)} lastMove={null} interactive autoQueen onMove={onMove} />);
+    tap('a7');
+    tap('a8');
+    await settle();
+    expect(onMove).toHaveBeenCalledTimes(1);
+    expect(onMove).toHaveBeenCalledWith('a7a8q');
+    expect(screen.queryByRole('button', { name: 'Ферзь' })).toBeNull();
+  });
+
   it('превращение: отказ от выбора отменяет ход', async () => {
     const fen = '8/P6k/8/8/8/8/8/K7 w - - 0 1';
     const onMove = vi.fn();
