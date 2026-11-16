@@ -38,4 +38,14 @@ describe('App', () => {
     render(<App />);
     expect(screen.queryByRole('navigation')).toBeNull();
   });
+
+  it('на экране разбора партии вкладки скрыты, на сводке — видны', () => {
+    window.location.hash = '#/games/g1/review';
+    const { unmount } = render(<App />);
+    expect(screen.queryByRole('navigation')).toBeNull();
+    unmount();
+    window.location.hash = '#/games/g1';
+    render(<App />);
+    expect(screen.getByRole('navigation')).toBeTruthy();
+  });
 });

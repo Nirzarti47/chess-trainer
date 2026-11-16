@@ -5,6 +5,7 @@ import { AppearanceScreen } from './screens/AppearanceScreen';
 import { BackupScreen } from './screens/BackupScreen';
 import { GamesScreen } from './screens/games/GamesScreen';
 import { GameSummaryScreen } from './screens/games/GameSummaryScreen';
+import { ReviewScreen } from './screens/games/ReviewScreen';
 import { LearnScreen } from './screens/LearnScreen';
 import { LessonScreen, WeakSpotsScreen } from './screens/LessonScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
@@ -19,9 +20,10 @@ function RunRoute() {
   return mode === 'weak' ? <WeakSpotsScreen /> : <PuzzleRunScreen key={mode} />;
 }
 
-/** На экранах урока и решения задач подряд нижние вкладки скрыты. */
+/** На экранах урока, решения задач подряд, разбора партии и задач из партий нижние вкладки скрыты. */
 function isFullscreenRoute(pathname: string) {
-  return pathname.startsWith('/lesson/') || pathname.startsWith('/run/');
+  return pathname.startsWith('/lesson/') || pathname.startsWith('/run/')
+    || /^\/games\/[^/]+\/(review|fix)$/.test(pathname) || pathname === '/games/patterns/train';
 }
 
 function Layout() {
@@ -35,6 +37,7 @@ function Layout() {
           <Route path="/puzzles" element={<PuzzlesScreen />} />
           <Route path="/games" element={<GamesScreen />} />
           <Route path="/games/:gameId" element={<GameSummaryScreen />} />
+          <Route path="/games/:gameId/review" element={<ReviewScreen />} />
           <Route path="/profile" element={<ProfileScreen />} />
           <Route path="/profile/appearance" element={<AppearanceScreen />} />
           <Route path="/profile/backup" element={<BackupScreen />} />

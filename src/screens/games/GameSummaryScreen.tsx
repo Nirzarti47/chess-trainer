@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { CONFIG } from '../../analysis/config';
 import { KIND_ADVICE, KIND_TITLE } from '../../analysis/phrases';
-import { getAnalysis, getGame, getGamePuzzles } from '../../data/gamesRepo';
+import { getCurrentAnalysis, getGame, getGamePuzzles } from '../../data/gamesRepo';
 import type { GameAnalysis, GameRecord, MistakeKind } from '../../domain/gameTypes';
 import { gamesQueue, useGamesState } from '../../games/gamesStore';
 import { BigButton } from '../../ui/BigButton';
@@ -56,8 +55,7 @@ export function GameSummaryScreen() {
         setPhase({ kind: 'notFound' });
         return;
       }
-      let analysis = await getAnalysis(gameId);
-      if (analysis && analysis.rulesVersion !== CONFIG.RULES_VERSION) analysis = undefined;
+      let analysis = await getCurrentAnalysis(gameId);
       if (!analysis) {
         if (!alive) return;
         setPhase({ kind: 'running', game });

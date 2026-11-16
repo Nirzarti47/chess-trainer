@@ -1,3 +1,4 @@
+import { CONFIG } from '../analysis/config';
 import { db } from './db';
 import type { ChessUser, GameAnalysis, GamePuzzle, GameRecord, RangeChoice } from '../domain/gameTypes';
 
@@ -61,6 +62,12 @@ export async function getGame(id: string): Promise<GameRecord | undefined> {
 
 export async function getAnalysis(gameId: string): Promise<GameAnalysis | undefined> {
   return db.analyses.get(gameId);
+}
+
+/** Разбор по нынешним правилам; устаревший (другая rulesVersion) считается отсутствующим. */
+export async function getCurrentAnalysis(gameId: string): Promise<GameAnalysis | undefined> {
+  const a = await getAnalysis(gameId);
+  return a?.rulesVersion === CONFIG.RULES_VERSION ? a : undefined;
 }
 
 export async function getAnalyses(): Promise<GameAnalysis[]> {

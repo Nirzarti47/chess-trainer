@@ -28,6 +28,10 @@
   background: var(--board-hi-dark, #c19a3b);
 }
 
+.board cg-board square.hi-bad {
+  background: rgba(226, 92, 76, 0.55);
+}
+
 .board cg-board square.selected {
   background: color-mix(in srgb, var(--board-hi-dark, #c19a3b) 70%, transparent);
 }
@@ -91,6 +95,43 @@
 .board .cg-wrap coords.files.black {
   flex-flow: row-reverse;
 }
+
+/* Слой поверх поля доски (без полос под буквы и цифры): значок оценки хода в углу поля. */
+.board-layer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: var(--coord-gutter);
+  left: var(--coord-gutter);
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* left и top — угол поля; отступ сдвигает значок в правый верхний угол (проценты от ширины доски). */
+.board-badge {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: -7px 0 0 calc(12.5% - 15px);
+  border: 2px solid var(--bg, #16222c);
+  border-radius: 50%;
+  background: var(--tone, var(--muted));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.board-badge--brilliant { --tone: var(--grade-brilliant); }
+.board-badge--great { --tone: var(--grade-great); }
+.board-badge--best { --tone: var(--grade-best); }
+.board-badge--good { --tone: var(--grade-good); }
+.board-badge--inaccuracy { --tone: var(--grade-inaccuracy); }
+.board-badge--mistake { --tone: var(--grade-mistake); }
+.board-badge--blunder { --tone: var(--grade-blunder); }
 
 /* Выбор фигуры при превращении пешки */
 .board-promotion {

@@ -7,6 +7,15 @@
   --success: #63c29a;
   --weak: #5aa9d6;
 
+  /* Тона оценок хода в разборе: плашка карточки, значок на доске, точки графика */
+  --grade-brilliant: #5aa9d6;
+  --grade-great: #5aa9d6;
+  --grade-best: #63c29a;
+  --grade-good: #63c29a;
+  --grade-inaccuracy: var(--accent);
+  --grade-mistake: #e8873a;
+  --grade-blunder: #e25c4c;
+
   /* Производные оттенки из макета mockups/boards.html */
   --tabbar-bg: #111b23;
   --tab-idle: #6f8794;

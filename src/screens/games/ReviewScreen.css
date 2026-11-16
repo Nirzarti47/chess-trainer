@@ -1,0 +1,242 @@
+/* Разбор партии. Экран целиком помещается в высоту телефона: доска со шкалой, карточка с внутренней
+   прокруткой, невысокий график и кнопки, прижатые к низу. */
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100%;
+  padding: 10px 16px 0;
+}
+
+.review--message {
+  gap: 14px;
+  padding-top: 18px;
+}
+
+.review h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.review-note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.review-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+  font-size: 13.5px;
+}
+
+.review-back {
+  flex: none;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.review-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+/* Шкала и доска. На низких экранах доска уменьшается, чтобы карточка, график и кнопки остались видны. */
+.review-board {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  align-self: center;
+  width: min(100%, max(240px, calc(100dvh - 420px - env(safe-area-inset-top) - env(safe-area-inset-bottom))));
+}
+
+.review-board-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Шкала стоит вдоль поля доски, без полосы под буквы снизу. */
+.eval-bar {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: 18px;
+  margin-bottom: 15px;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+/* Снизу — цвет владельца, сверху — соперника. */
+.eval-bar--white { background: #2b3a46; }
+.eval-bar--black { background: #e4ecef; }
+
+.eval-bar-fill {
+  display: block;
+  transition: height 0.25s ease;
+}
+
+.eval-bar--white .eval-bar-fill { background: #e4ecef; }
+.eval-bar--black .eval-bar-fill { background: #2b3a46; }
+
+.eval-bar-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  letter-spacing: -0.3px;
+}
+
+.eval-bar-text--top { top: 4px; }
+.eval-bar-text--bottom { bottom: 4px; }
+.eval-bar--white .eval-bar-text--top,
+.eval-bar--black .eval-bar-text--bottom { color: #e4ecef; }
+.eval-bar--white .eval-bar-text--bottom,
+.eval-bar--black .eval-bar-text--top { color: #1b232a; }
+
+/* Карточка хода: высота ограничена, длинный текст прокручивается внутри. */
+.move-card {
+  flex: 0 1 auto;
+  min-height: 72px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.move-card p { margin: 0; }
+
+.move-card-start {
+  color: var(--muted);
+}
+
+.move-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.move-card-grade {
+  padding: 2px 8px;
+  border-radius: 8px;
+  color: #16222c;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.move-card-move { font-size: 15px; }
+
+.move-card-phrase {
+  margin-top: 6px !important;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.move-card-alts {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.move-card-lab {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.move-card-alt {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 7px 10px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.move-card-alt b { color: var(--success); }
+.move-card-alt--on { border-color: var(--weak); }
+.move-card-same { color: var(--muted); font-size: 13px; }
+
+.move-card-alt small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* График: верх светлый (белые), низ тёмный (чёрные). touch-action: none — ведение пальцем не прокручивает страницу. */
+.game-chart {
+  position: relative;
+  flex: none;
+  height: 60px;
+  border-radius: 10px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.game-chart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.game-chart-white { fill: #9fb0bd; }
+.game-chart-black { fill: #2b3a46; }
+
+.game-chart-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.game-chart-now {
+  stroke: var(--text);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+}
+
+.game-chart-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border: 1.5px solid var(--bg);
+  border-radius: 50%;
+  box-sizing: content-box;
+  pointer-events: none;
+}
+
+/* Кнопки прижаты к низу, как в уроке */
+.review-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  gap: 10px;
+  margin: auto -16px 0;
+  padding: 10px 14px calc(14px + env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, transparent, var(--bg) 10px);
+}
+
+.review-actions .big-button { flex: 1; }
+.review-actions .review-main { flex: 2; }

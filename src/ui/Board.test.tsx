@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Settings } from '../domain/types';
 import { legalDests } from '../domain/puzzle';
+import type { Api } from 'chessground/api';
 import { Board } from './Board';
 import { SettingsProvider, useSettings } from './settings';
 
@@ -203,5 +204,61 @@ describe('Board: оформление', () => {
     // та же доска, без перемонтирования
     expect(document.querySelector('cg-board')).toBe(boardEl);
     expect(repo.saveSettings).toHaveBeenCalledWith({ board: 'green', pieceSet: 'cburnett' });
+  });
+});
+
+describe('Board: разбор партии', () => {
+  const AFTER_E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+
+  it('badge рисует значок с текстом на нужном поле', () => {
+    const { rerender } = render(
+      <Board fen={START} orientation="white" dests={new Map()} lastMove={null} interactive={false} onMove={() => {}}
+        badge={{ square: 'f7', text: '??', tone: 'blunder' }} />,
+    );
+    const badge = document.querySelector<HTMLElement>('.board-badge')!;
+    expect(badge.textContent).toBe('??');
+    expect(badge.dataset.square).toBe('f7');
+    expect(badge.classList).toContain('board-badge--blunder');
+    // Поле f7 при белых снизу: шестой столбец, вторая строка сверху.
+    expect([badge.style.left, badge.style.top]).toEqual(['62.5%', '12.5%']);
+    rerender(
+      <Board fen={START} orientation="black" dests={new Map()} lastMove={null} interactive={false} onMove={() => {}}
+        badge={{ square: 'f7', text: '??', tone: 'blunder' }} />,
+    );
+    const turned = document.querySelector<HTMLElement>('.board-badge')!;
+    expect([turned.style.left, turned.style.top]).toEqual(['25%', '75%']);
+  });
+
+  it('без badge значка нет', () => {
+    render(<Board fen={START} orientation="white" dests={new Map()} lastMove={null} interactive={false} onMove={() => {}} />);
+    expect(document.querySelector('.board-badge')).toBeNull();
+  });
+
+  it("lastMoveTone: 'bad' ставит полям хода отдельный класс", () => {
+    render(
+      <Board fen={AFTER_E4} orientation="white" dests={new Map()} lastMove={['e2', 'e4']} lastMoveTone="bad"
+        interactive={false} onMove={() => {}} />,
+    );
+    expect(document.querySelectorAll('cg-board square.hi-bad')).toHaveLength(2);
+    expect(document.querySelectorAll('cg-board square.hi-light, cg-board square.hi-dark')).toHaveLength(0);
+  });
+
+  it('без lastMoveTone подсветка хода прежняя', () => {
+    render(<Board fen={AFTER_E4} orientation="white" dests={new Map()} lastMove={['e2', 'e4']} interactive={false} onMove={() => {}} />);
+    expect(document.querySelectorAll('cg-board square.hi-bad')).toHaveLength(0);
+    expect(document.querySelectorAll('cg-board square.hi-light, cg-board square.hi-dark')).toHaveLength(2);
+  });
+
+  it('стрелки разбора идут своими кистями', () => {
+    render(
+      <Board fen={START} orientation="white" dests={new Map()} lastMove={null} interactive={false} onMove={() => {}}
+        arrows={[{ from: 'g1', to: 'f3', tone: 'best' }, { from: 'b1', to: 'c3', tone: 'alt' }, ['e2', 'e4']]} />,
+    );
+    const { drawable } = (cg.apis[0] as unknown as Api).state;
+    expect(drawable.autoShapes.map((s) => [s.orig, s.dest, s.brush])).toEqual([
+      ['g1', 'f3', 'best'], ['b1', 'c3', 'alt'], ['e2', 'e4', 'hint'],
+    ]);
+    expect(drawable.brushes.best.color).toBe('#63C29A');
+    expect(drawable.brushes.alt.color).toBe('#5AA9D6');
   });
 });
