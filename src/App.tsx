@@ -4,6 +4,7 @@ import { AboutScreen } from './screens/AboutScreen';
 import { AppearanceScreen } from './screens/AppearanceScreen';
 import { BackupScreen } from './screens/BackupScreen';
 import { GamesScreen } from './screens/games/GamesScreen';
+import { GameSummaryScreen } from './screens/games/GameSummaryScreen';
 import { LearnScreen } from './screens/LearnScreen';
 import { LessonScreen, WeakSpotsScreen } from './screens/LessonScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
@@ -33,6 +34,7 @@ function Layout() {
           <Route path="/learn" element={<LearnScreen />} />
           <Route path="/puzzles" element={<PuzzlesScreen />} />
           <Route path="/games" element={<GamesScreen />} />
+          <Route path="/games/:gameId" element={<GameSummaryScreen />} />
           <Route path="/profile" element={<ProfileScreen />} />
           <Route path="/profile/appearance" element={<AppearanceScreen />} />
           <Route path="/profile/backup" element={<BackupScreen />} />

@@ -8,10 +8,10 @@ import { BigButton } from '../../ui/BigButton';
 import { NickForm } from './NickForm';
 import './GamesScreen.css';
 
-const RESULT: Record<GameRecord['result'], string> = { win: 'Победа', loss: 'Поражение', draw: 'Ничья' };
+export const RESULT: Record<GameRecord['result'], string> = { win: 'Победа', loss: 'Поражение', draw: 'Ничья' };
 const KIND: Record<TimeClass, string> = { rapid: 'Рапид', blitz: 'Блиц', bullet: 'Пуля', daily: 'По переписке' };
 
-function formatDate(ms: number): string {
+export function formatDate(ms: number): string {
   const d = new Date(ms);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}`;
