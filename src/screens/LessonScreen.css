@@ -182,3 +182,16 @@
 .task-actions:empty {
   display: none;
 }
+
+/* Метка задачи из своей партии рядом с подписью стороны. */
+.task-head .task-badge {
+  margin-left: 10px;
+  color: var(--weak);
+}
+
+.task-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 14.5px;
+  color: var(--weak);
+}

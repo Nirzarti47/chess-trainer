@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Chess } from 'chess.js';
+import { Link } from 'react-router-dom';
 import { bestReply as engineBestReply } from '../engine/engine';
 import { legalDests, resultOf, sideToMove, startPuzzle, takeHint, tryMove } from '../domain/puzzle';
 import type { AuthoredTask, ChoiceQuestion, ExplainStep, LessonTask, Puzzle, TaskResult } from '../domain/types';
@@ -55,14 +56,15 @@ function useLater() {
   return { later, alive };
 }
 
-function Frame({ heading, caption, board, body, actions }: {
-  heading: string; caption?: string; board?: ReactNode; body?: ReactNode; actions?: ReactNode;
+function Frame({ heading, caption, badge, board, body, actions }: {
+  heading: string; caption?: string; badge?: string; board?: ReactNode; body?: ReactNode; actions?: ReactNode;
 }) {
   return (
     <div className="task">
       <header className="task-head">
         <h1>{heading}</h1>
         {caption && <span>{caption}</span>}
+        {badge && <span className="task-badge">{badge}</span>}
       </header>
       {board && <div className="task-board">{board}</div>}
       <div className="task-body">{body}</div>
@@ -175,6 +177,7 @@ function PuzzleTask({ puzzle, title, onDone, bestReply }: {
     <Frame
       heading={title}
       caption={sideCaption(orientation)}
+      badge={puzzle.game && 'Из твоей партии'}
       board={
         <Board
           fen={fen}
@@ -192,6 +195,14 @@ function PuzzleTask({ puzzle, title, onDone, bestReply }: {
           {state.status === 'solved' && <Verdict ok>Верно</Verdict>}
           {feedback === 'wrong' && <Verdict ok={false}>Не тот ход</Verdict>}
           {feedback === 'wrongReply' && <Verdict ok={false}>Не тот ход. Соперник ответит так</Verdict>}
+          {done && puzzle.game && (
+            <>
+              <p className="task-text">{puzzle.game.phrase}</p>
+              <Link className="task-link" to={`/games/${puzzle.game.gameId}/review?ply=${puzzle.game.ply}`}>
+                Открыть этот ход в разборе
+              </Link>
+            </>
+          )}
         </>
       }
       actions={actions}

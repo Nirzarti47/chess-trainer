@@ -1,4 +1,6 @@
+import { isGamePuzzleId, toPuzzle } from '../analysis/gamePuzzles';
 import type { Puzzle, ThemeId } from '../domain/types';
+import { getGamePuzzle } from './gamesRepo';
 
 export type Circle123 = 1 | 2 | 3;
 
@@ -84,7 +86,12 @@ export function loadCircle(c: Circle123): Promise<PuzzlePool> {
   return pending;
 }
 
+/** Задача по id: из партии — из базы на устройстве (файлы кругов не грузятся), иначе — по всем кругам. */
 export async function findPuzzle(id: string): Promise<Puzzle | undefined> {
+  if (isGamePuzzleId(id)) {
+    const found = await getGamePuzzle(id);
+    return found && toPuzzle(found);
+  }
   for (const c of [1, 2, 3] as const) {
     const found = (await loadCircle(c)).byId(id);
     if (found) return found;

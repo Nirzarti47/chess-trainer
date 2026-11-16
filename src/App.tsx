@@ -7,7 +7,7 @@ import { GamesScreen } from './screens/games/GamesScreen';
 import { GameSummaryScreen } from './screens/games/GameSummaryScreen';
 import { ReviewScreen } from './screens/games/ReviewScreen';
 import { LearnScreen } from './screens/LearnScreen';
-import { LessonScreen, WeakSpotsScreen } from './screens/LessonScreen';
+import { LessonScreen, RepeatLessonScreen, WeakSpotsScreen } from './screens/LessonScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { PuzzleRunScreen, PuzzlesScreen } from './screens/PuzzlesScreen';
 import { ErrorBoundary } from './ui/ErrorBoundary';
@@ -18,6 +18,12 @@ import { TabBar } from './ui/TabBar';
 function RunRoute() {
   const { mode } = useParams();
   return mode === 'weak' ? <WeakSpotsScreen /> : <PuzzleRunScreen key={mode} />;
+}
+
+/** «Исправить ошибки»: урок из задач партии, выход — на её сводку. */
+function FixRoute() {
+  const { gameId = '' } = useParams();
+  return <RepeatLessonScreen key={gameId} nodeId={'game:' + gameId} exitTo={'/games/' + gameId} />;
 }
 
 /** На экранах урока, решения задач подряд, разбора партии и задач из партий нижние вкладки скрыты. */
@@ -38,6 +44,7 @@ function Layout() {
           <Route path="/games" element={<GamesScreen />} />
           <Route path="/games/:gameId" element={<GameSummaryScreen />} />
           <Route path="/games/:gameId/review" element={<ReviewScreen />} />
+          <Route path="/games/:gameId/fix" element={<FixRoute />} />
           <Route path="/profile" element={<ProfileScreen />} />
           <Route path="/profile/appearance" element={<AppearanceScreen />} />
           <Route path="/profile/backup" element={<BackupScreen />} />

@@ -5,6 +5,7 @@ import {
   saveActiveLesson, type ActiveLesson,
 } from '../data/repo';
 import { bestReply as engineBestReply, warmUp as engineWarmUp } from '../engine/engine';
+import { puzzleAttempt } from '../domain/attempt';
 import { EXAM_ADVICE_BELOW } from '../domain/path';
 import type { LessonTask, Source, TaskResult } from '../domain/types';
 import { XP } from '../domain/xp';
@@ -89,10 +90,7 @@ export function LessonRun({ tasks, source, title, onFinish, onExit, resumeKey, r
     void queue(async () => {
       // Возврат задачи в конце урока — часть урока, а не повторение: не двигает интервал и не даёт опыт.
       if (first && task.kind === 'puzzle') {
-        const { puzzle } = task;
-        const rated = source !== 'review' && !(await seen).has(puzzle.id);
-        await recordTaskResult({ puzzleId: puzzle.id, themes: puzzle.themes, puzzleRating: puzzle.rating,
-          result, source, rated, now });
+        await recordTaskResult({ ...puzzleAttempt(task.puzzle, source, await seen), result, source, now });
       } else if (first && recorded !== null) {
         await recordTaskResult({ themes: [], result, source, rated: false, now });
       }
@@ -132,7 +130,8 @@ export function LessonRun({ tasks, source, title, onFinish, onExit, resumeKey, r
 
 type Phase =
   | { kind: 'loading' }
-  | { kind: 'missing' }
+  /** title — что показать вместо «Урок не найден» (например, у партии нет задач). */
+  | { kind: 'missing'; title: string }
   /** Урок есть, но открыть его не вышло; detail — текст сбоя для диагностики. */
   | { kind: 'failed'; detail: string }
   /** route — адрес урока, для которого загружен этот ход (`${nodeId}/${lessonIndex}`). */
@@ -144,10 +143,11 @@ function canResume(a: SavedLesson | null, nodeId: string, lessonIndex: number): 
     && a.source !== undefined && a.tasks.length > 0 && a.cursor < a.tasks.length + a.retry.length;
 }
 
-/** Экран урока: берёт задания у фабрики (или продолжает сохранённый урок), ведёт их и показывает итог. */
-export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp, factory = realLessonFactory,
-  bestReply = engineBestReply, warmUp = engineWarmUp }: {
-  nodeId?: string; lessonIndex?: number; factory?: LessonFactory; bestReply?: BestReply;
+/** Экран урока: берёт задания у фабрики (или продолжает сохранённый урок), ведёт их и показывает итог.
+ *  exitTo — куда вести по выходу из урока и после итога. */
+export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp, exitTo = '/learn',
+  factory = realLessonFactory, bestReply = engineBestReply, warmUp = engineWarmUp }: {
+  nodeId?: string; lessonIndex?: number; exitTo?: string; factory?: LessonFactory; bestReply?: BestReply;
   warmUp?: () => Promise<boolean>;
 }) {
   const params = useParams();
@@ -183,7 +183,9 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
       ({ lesson, resume }) => { if (alive) setPhase({ kind: 'run', route, lesson, resume }); },
       (e: unknown) => {
         if (!alive) return;
-        setPhase(e instanceof LessonNotFoundError ? { kind: 'missing' } : { kind: 'failed', detail: describeError(e) });
+        setPhase(e instanceof LessonNotFoundError
+          ? { kind: 'missing', title: e.screenText ?? 'Урок не найден' }
+          : { kind: 'failed', detail: describeError(e) });
       },
     );
     return () => {
@@ -191,7 +193,8 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
     };
   }, [nodeId, lessonIndex, route, factory, attempt]);
 
-  const toLearn = () => navigate('/learn');
+  const toExit = () => navigate(exitTo);
+  const backLabel = exitTo === '/learn' ? 'К урокам' : 'Назад';
 
   function finish(summary: LessonSummaryData) {
     const advice = nodeId.endsWith(':exam') && summary.total > 0 && summary.clean / summary.total < EXAM_ADVICE_BELOW;
@@ -211,8 +214,8 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
     case 'missing':
       return (
         <section className="lesson lesson-message">
-          <h1>Урок не найден</h1>
-          <BigButton onClick={toLearn}>К урокам</BigButton>
+          <h1>{shown.title}</h1>
+          <BigButton onClick={toExit}>{backLabel}</BigButton>
         </section>
       );
     case 'failed':
@@ -221,7 +224,7 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
           <h1>Не удалось открыть урок</h1>
           <p className="lesson-error-detail">{shown.detail}</p>
           <BigButton onClick={() => setAttempt((n) => n + 1)}>Повторить</BigButton>
-          <BigButton variant="surface" onClick={toLearn}>К урокам</BigButton>
+          <BigButton variant="surface" onClick={toExit}>{backLabel}</BigButton>
         </section>
       );
     case 'run':
@@ -234,30 +237,37 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
           resume={shown.resume}
           resumeKey={{ nodeId, lessonIndex }}
           onFinish={finish}
-          onExit={toLearn}
+          onExit={toExit}
           bestReply={bestReply}
         />
       );
     case 'summary':
-      return <LessonSummary {...shown.summary} advice={shown.advice} onDone={toLearn} />;
+      return <LessonSummary {...shown.summary} advice={shown.advice} onDone={toExit} />;
   }
 }
 
-/** «Слабые места»: каждый запуск — новый урок узла weak с номером по числу уже пройденных. */
-export function WeakSpotsScreen() {
+/** Урок, который проходят много раз («Слабые места», «Исправить ошибки»): каждый запуск — новый урок узла
+ *  с номером по числу уже пройденных. */
+export function RepeatLessonScreen({ nodeId, exitTo }: { nodeId: string; exitTo: string }) {
   const [lessonIndex, setLessonIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
+    setLessonIndex(null);
     getLessonProgress()
-      .then((rows) => rows.filter((r) => r.nodeId === 'weak').length)
+      .then((rows) => rows.filter((r) => r.nodeId === nodeId).length)
       .catch(() => 0)
       .then((count) => { if (alive) setLessonIndex(count); });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [nodeId]);
 
   if (lessonIndex === null) return <section className="lesson lesson-message" aria-busy="true" />;
-  return <LessonScreen nodeId="weak" lessonIndex={lessonIndex} />;
+  return <LessonScreen nodeId={nodeId} lessonIndex={lessonIndex} exitTo={exitTo} />;
+}
+
+/** «Слабые места». */
+export function WeakSpotsScreen() {
+  return <RepeatLessonScreen nodeId="weak" exitTo="/learn" />;
 }

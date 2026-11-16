@@ -1,3 +1,4 @@
+import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PuzzleRow } from './puzzleStore';
 
@@ -91,5 +92,20 @@ describe('puzzleStore', () => {
     const { findPuzzle: fp } = await import('./puzzleStore');
     expect((await fp('f'))?.id).toBe('f');
     expect(await fp('nope')).toBeUndefined();
+  });
+
+  it('findPuzzle для задачи из партии берёт её из базы, файлы кругов не грузит', async () => {
+    const { db } = await import('./db');
+    await db.delete();
+    await db.open();
+    await db.gamePuzzles.put({ id: 'g:x:5', gameId: 'x', ply: 5, endTime: 100, fen: FEN, moves: ['a1a2', 'h1h2'],
+      kind: 'other', phrase: 'Фраза', loss: 0.3 });
+    const { findPuzzle: fp } = await import('./puzzleStore');
+    const p = await fp('g:x:5');
+    expect(p?.id).toBe('g:x:5');
+    expect(p?.game?.ply).toBe(5);
+    expect(p?.moves).toEqual(['a1a2', 'h1h2']);
+    expect(await fp('g:x:7')).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

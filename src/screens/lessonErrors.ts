@@ -1,6 +1,7 @@
 /** Урока по такому адресу нет (неизвестный узел, номер вне диапазона). Остальные сбои — «не удалось открыть». */
 export class LessonNotFoundError extends Error {
-  constructor(message = 'Урок не найден') {
+  /** screenText — заголовок для экрана вместо «Урок не найден». */
+  constructor(message = 'Урок не найден', readonly screenText?: string) {
     super(message);
     this.name = 'LessonNotFoundError';
   }

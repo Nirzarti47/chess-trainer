@@ -11,6 +11,7 @@ import { buildPath } from '../domain/path';
 import { START_RATING } from '../domain/rating';
 import { weakestThemes } from '../domain/themeStats';
 import type { LessonTask, Puzzle, ThemeId, ThemeStat } from '../domain/types';
+import { gameLesson, GAME_NODE_PREFIX } from './gameLessons';
 import { labelled, LessonNotFoundError } from './lessonErrors';
 import type { Lesson } from './LessonScreen';
 import { loadOpenPool, openBand, openThemesOf } from './openThemes';
@@ -90,10 +91,11 @@ async function weakLesson(): Promise<Lesson> {
   return { title: 'Слабые места', source: 'weak', tasks: asPuzzleTasks(puzzles) };
 }
 
-/** Задания урока по узлу пути: тема, закрепление темы (`<узел>:reinforce`), контрольная, «Слабые места» (`weak`)
- *  или авторский урок. */
+/** Задания урока по узлу пути: тема, закрепление темы (`<узел>:reinforce`), контрольная, «Слабые места» (`weak`),
+ *  «Исправить ошибки» (`game:<id партии>`) или авторский урок. */
 export async function lessonFactory(nodeId: string, lessonIndex: number): Promise<Lesson> {
   if (nodeId === WEAK_NODE) return weakLesson();
+  if (nodeId.startsWith(GAME_NODE_PREFIX)) return gameLesson(nodeId.slice(GAME_NODE_PREFIX.length));
 
   const reinforce = nodeId.endsWith(REINFORCE_SUFFIX);
   const id = reinforce ? nodeId.slice(0, -REINFORCE_SUFFIX.length) : nodeId;

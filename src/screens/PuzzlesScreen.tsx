@@ -6,6 +6,7 @@ import {
   deleteReviews, getDay, getDueReviews, getLessonProgress, getProfile, getSeenPuzzleIds, getThemeStats, recordTaskResult,
 } from '../data/repo';
 import { bestReply as engineBestReply, warmUp as engineWarmUp } from '../engine/engine';
+import { puzzleAttempt } from '../domain/attempt';
 import { localDay } from '../domain/dates';
 import { buildPath } from '../domain/path';
 import { nextFreePuzzle } from '../domain/picker';
@@ -250,6 +251,8 @@ function PuzzleStream({ theme, onExit, bestReply }: { theme?: ThemeId; onExit():
   }
 }
 
+const NO_SEEN: ReadonlySet<string> = new Set();
+
 /** Задачи со сроком повторения по очереди, без рейтинга. Ошибка переносит задачу на потом, а не в эту сессию. */
 function ReviewRun({ onExit, bestReply }: { onExit(): void; bestReply: BestReply }) {
   const [queue, setQueue] = useState<Puzzle[] | null>(null);
@@ -262,7 +265,7 @@ function ReviewRun({ onExit, bestReply }: { onExit(): void; bestReply: BestReply
     getDueReviews(today())
       .then(async (due) => {
         const found = await Promise.all(due.map((r) => findPuzzle(r.puzzleId)));
-        // Задачи нет в базе (база пересобрана): запись повторения больше не нужна.
+        // Задачи нет в базе (база пересобрана, партии удалены сменой ника): запись повторения больше не нужна.
         await deleteReviews(due.filter((_, i) => found[i] === undefined).map((r) => r.puzzleId));
         return found.filter((p): p is Puzzle => p !== undefined);
       })
@@ -282,8 +285,9 @@ function ReviewRun({ onExit, bestReply }: { onExit(): void; bestReply: BestReply
     if (busy.current) return;
     busy.current = true;
     try {
-      await recordTaskResult({ puzzleId: puzzle.id, themes: puzzle.themes, puzzleRating: puzzle.rating, result,
-        source: 'review', rated: false, now: new Date() });
+      // В повторении задача не идёт в рейтинг (rated: false).
+      await recordTaskResult({ ...puzzleAttempt(puzzle, 'review', NO_SEEN), result, source: 'review',
+        now: new Date() });
     } catch (e: unknown) {
       console.error('Не удалось записать задачу', e);
     }

@@ -8,7 +8,8 @@ import { localDay } from '../domain/dates';
 import type { LessonTask, Puzzle, Source } from '../domain/types';
 import type { BoardProps } from '../ui/Board';
 import { LessonNotFoundError } from './lessonErrors';
-import { LessonScreen } from './LessonScreen';
+import { LessonScreen, RepeatLessonScreen } from './LessonScreen';
+import { TaskRunner } from './TaskRunner';
 
 // Настоящая доска проверена в Board.test.tsx; здесь поддельная: запоминает свойства и даёт сделать ход.
 const board = vi.hoisted(() => ({ props: null as BoardProps | null }));
@@ -21,6 +22,9 @@ vi.mock('../ui/Board', async () => {
     },
   };
 });
+
+// Экраны без свойства bestReply (RepeatLessonScreen) берут движок по умолчанию: в тестах он не нужен.
+vi.mock('../engine/engine', () => ({ bestReply: vi.fn(async () => null), warmUp: vi.fn(async () => true) }));
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -475,5 +479,163 @@ describe('LessonScreen', () => {
     expect(await screen.findByText('Урок не найден')).toBeTruthy();
     await click('К урокам');
     expect(await screen.findByRole('heading', { name: 'Учёба' })).toBeTruthy();
+  });
+});
+
+const PHRASE = 'Фигура осталась без защиты';
+
+/** Задача из партии x: ход 5, тот же образец, что pz. */
+const gamePz = (ply = 5, moves = ['e2e4', 'e7e5']): LessonTask => ({
+  kind: 'puzzle',
+  puzzle: { id: `g:x:${ply}`, fen: START, moves, rating: 0, themes: ['hangingPiece'],
+    game: { gameId: 'x', ply, phrase: PHRASE } },
+});
+
+function renderGameLesson(factory: ReturnType<typeof lesson>) {
+  return render(
+    <MemoryRouter initialEntries={['/games/x/fix']}>
+      <Routes>
+        <Route path="/games/x/fix" element={
+          <LessonScreen nodeId="game:x" lessonIndex={0} exitTo="/games/x" factory={factory}
+            bestReply={vi.fn(async () => null)} warmUp={vi.fn(async () => true)} />} />
+        <Route path="/games/x" element={<h1>Сводка партии</h1>} />
+        <Route path="/games/x/review" element={<h1>Разбор</h1>} />
+        <Route path="/learn" element={<h1>Учёба</h1>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe('урок «Исправить ошибки»', () => {
+  it('ошибка: запись повторения, рейтинг не меняется, опыт растёт; итог ведёт на сводку партии', async () => {
+    renderGameLesson(lesson([gamePz(5), gamePz(9, P2_MOVES)], 'game'));
+    await waitInteractive(P1);
+    move('a7a6');
+    expect(await screen.findByText('Не тот ход')).toBeTruthy();
+    await solve('e7e5', P1);
+    await waitInteractive(P2);
+    await waitFor(async () => expect(await db.reviews.get('g:x:5')).toBeTruthy());
+    const profile = await getProfile();
+    expect(profile.rating).toBe(600);
+    expect(profile.ratedCount).toBe(0);
+    expect(profile.xp).toBe(5);
+    expect(await db.ratingHistory.count()).toBe(0);
+    expect(await db.themeStats.count()).toBe(0);
+
+    await solve('d7d5', P2);
+    await solve('e7e5', P1);
+    expect(await screen.findByText('Решено с первого раза: 1 из 2')).toBeTruthy();
+    await waitFor(async () => expect(await loadActiveLesson()).toBeNull());
+    expect((await db.days.get(localDay(new Date())))?.lessons).toBe(1);
+    expect(await db.lessons.toArray()).toEqual([{ nodeId: 'game:x', lessonIndex: 0, clean: 1, total: 2 }]);
+    expect(await attempts()).toEqual([
+      { puzzleId: 'g:x:5', result: 'mistake', rated: false, source: 'game' },
+      { puzzleId: 'g:x:9', result: 'clean', rated: false, source: 'game' },
+    ]);
+    expect((await getProfile()).rating).toBe(600);
+
+    await click('Готово');
+    expect(await screen.findByRole('heading', { name: 'Сводка партии' })).toBeTruthy();
+  });
+
+  it('выход из урока ведёт на сводку партии', async () => {
+    renderGameLesson(lesson([gamePz(5)], 'game'));
+    await waitInteractive(P1);
+    fireEvent.click(screen.getByRole('button', { name: 'Выйти из урока' }));
+    await click('Выйти');
+    expect(await screen.findByRole('heading', { name: 'Сводка партии' })).toBeTruthy();
+  });
+
+  it('ссылка «Открыть этот ход в разборе» уводит с урока на разбор', async () => {
+    renderGameLesson(lesson([gamePz(5)], 'game'));
+    await waitInteractive(P1);
+    move('e7e5');
+    fireEvent.click(await screen.findByRole('link', { name: 'Открыть этот ход в разборе' }));
+    expect(await screen.findByRole('heading', { name: 'Разбор' })).toBeTruthy();
+  });
+});
+
+describe('RepeatLessonScreen', () => {
+  function renderRepeat(nodeId: string) {
+    return render(
+      <MemoryRouter initialEntries={['/games/x/fix']}>
+        <Routes>
+          <Route path="/games/x/fix" element={<RepeatLessonScreen nodeId={nodeId} exitTo="/games/x" />} />
+          <Route path="/games/x" element={<h1>Сводка партии</h1>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+  }
+
+  it('урок партии из базы: задачи по ходу партии, номер урока — по числу пройденных', async () => {
+    const gp = (ply: number, moves: [string, string]) => ({ id: `g:x:${ply}`, gameId: 'x', ply, endTime: 1,
+      fen: START, moves, kind: 'pieceEnPrise' as const, phrase: PHRASE, loss: 0.3 });
+    await db.gamePuzzles.bulkPut([gp(9, ['d2d4', 'd7d5']), gp(5, ['e2e4', 'e7e5'])]);
+    await db.lessons.put({ nodeId: 'game:x', lessonIndex: 0, clean: 0, total: 2 });
+    renderRepeat('game:x');
+    expect(await screen.findByText('Исправить ошибки')).toBeTruthy();
+    expect(screen.getByText('1 из 2')).toBeTruthy();
+    await solve('e7e5', P1);
+    await solve('d7d5', P2);
+    expect(await screen.findByText('Решено с первого раза: 2 из 2')).toBeTruthy();
+    await waitFor(async () => expect(await db.lessons.get(['game:x', 1])).toEqual(
+      { nodeId: 'game:x', lessonIndex: 1, clean: 2, total: 2 }));
+    await click('Готово');
+    expect(await screen.findByRole('heading', { name: 'Сводка партии' })).toBeTruthy();
+  });
+
+  it('в партии нет задач: понятный текст и возврат на сводку', async () => {
+    renderRepeat('game:x');
+    expect(await screen.findByText('В этой партии нет задач на исправление')).toBeTruthy();
+    expect(screen.queryByText('Урок не найден')).toBeNull();
+    await click('Назад');
+    expect(await screen.findByRole('heading', { name: 'Сводка партии' })).toBeTruthy();
+  });
+});
+
+describe('TaskRunner: задача из партии', () => {
+  function renderTask(task: LessonTask) {
+    const onDone = vi.fn();
+    render(
+      <MemoryRouter>
+        <TaskRunner task={task} title="Исправить ошибки" onDone={onDone} bestReply={vi.fn(async () => null)} />
+      </MemoryRouter>,
+    );
+    return onDone;
+  }
+
+  it('метка «Из твоей партии»; после решения — фраза и ссылка на этот ход в разборе', async () => {
+    renderTask(gamePz(5));
+    expect(screen.getByText('Из твоей партии')).toBeTruthy();
+    expect(screen.getByText('Ход чёрных')).toBeTruthy();
+    expect(screen.queryByText(PHRASE)).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
+    await waitInteractive(P1);
+    move('e7e5');
+    expect(await screen.findByText('Верно')).toBeTruthy();
+    expect(screen.getByText(PHRASE)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Открыть этот ход в разборе' }).getAttribute('href'))
+      .toBe('/games/x/review?ply=5');
+  });
+
+  it('после показа решения тоже видны фраза и ссылка', async () => {
+    renderTask(gamePz(5));
+    await waitInteractive(P1);
+    move('a7a6');
+    await waitInteractive(P1);
+    move('a7a6');
+    await click('Показать решение');
+    await screen.findByRole('button', { name: 'Дальше' });
+    expect(screen.getByText(PHRASE)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Открыть этот ход в разборе' })).toBeTruthy();
+  });
+
+  it('обычная задача: без метки, фразы и ссылки', async () => {
+    renderTask(pz('p1'));
+    await waitInteractive(P1);
+    move('e7e5');
+    expect(await screen.findByText('Верно')).toBeTruthy();
+    expect(screen.queryByText('Из твоей партии')).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
   });
 });

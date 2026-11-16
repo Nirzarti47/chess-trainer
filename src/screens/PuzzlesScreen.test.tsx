@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { CURRICULUM } from '../content/curriculum';
 import { BANDS, THEMES } from '../content/themes';
 import { db } from '../data/db';
+import { changeNick } from '../data/gamesRepo';
 import { localDay } from '../domain/dates';
 import { makePuzzles } from '../domain/testPool';
 import type { LessonTask, Puzzle, TaskResult } from '../domain/types';
@@ -13,10 +14,13 @@ import { PuzzleRunScreen, PuzzlesScreen } from './PuzzlesScreen';
 const pools = vi.hoisted(() => ({ byCircle: new Map<number, Puzzle[]>() }));
 vi.mock('../data/puzzleStore', async (importOriginal) => {
   const { fakePool: makePool } = await import('../domain/testPool');
+  const real = await importOriginal<typeof import('../data/puzzleStore')>();
   return {
-    ...(await importOriginal<typeof import('../data/puzzleStore')>()),
+    ...real,
     loadCircle: vi.fn(async (c: number) => makePool(pools.byCircle.get(c) ?? [])),
-    findPuzzle: vi.fn(async (id: string) => [...pools.byCircle.values()].flat().find((p) => p.id === id)),
+    // Задачи из партий ищет настоящий findPuzzle (в базе), остальные — в поддельных кругах.
+    findPuzzle: vi.fn(async (id: string) => (id.startsWith('g:')
+      ? real.findPuzzle(id) : [...pools.byCircle.values()].flat().find((p) => p.id === id))),
   };
 });
 for (const c of [1, 2, 3] as const) {
@@ -35,12 +39,15 @@ const getDueReviews = vi.mocked(repo.getDueReviews);
 
 // Настоящий TaskRunner проверен в LessonScreen.test.tsx; здесь поддельный: показывает задачу и даёт её закончить.
 // Номер показа отличает новую задачу от прежней, даже если это та же задача.
+// Задача из партии показывается настоящим TaskRunner (с поддельной доской), чтобы была видна её метка.
 const mounts = vi.hoisted(() => ({ count: 0 }));
-vi.mock('./TaskRunner', async () => {
-  const { useState } = await import('react');
+vi.mock('./TaskRunner', async (importOriginal) => {
+  const { createElement, useState } = await import('react');
+  const real = await importOriginal<typeof import('./TaskRunner')>();
   return { TaskRunner: ({ task, title, onDone }: { task: LessonTask; title?: string; onDone(r: TaskResult): void }) => {
     const [mount] = useState(() => ++mounts.count);
     const p = task.kind === 'puzzle' ? task.puzzle : null;
+    if (p?.game) return createElement(real.TaskRunner, { task, title, onDone });
     return (
       <div>
         <p data-testid="task" data-themes={p?.themes.join(' ')} data-title={title} data-mount={mount}>{p?.id}</p>
@@ -49,6 +56,11 @@ vi.mock('./TaskRunner', async () => {
       </div>
     );
   } };
+});
+
+vi.mock('../ui/Board', async () => {
+  const { createElement } = await import('react');
+  return { Board: () => createElement('div', { 'data-testid': 'board' }) };
 });
 
 function Where() {
@@ -276,6 +288,30 @@ describe('повторение', () => {
     expect(await screen.findByText('На сегодня всё повторено')).toBeTruthy();
     expect(screen.queryByTestId('task')).toBeNull();
   });
+
+  it('задача из партии приходит в повторение с меткой «Из твоей партии», запись не удаляется', async () => {
+    await db.gamePuzzles.put({ id: 'g:x:5', gameId: 'x', ply: 5, endTime: 100,
+      fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', moves: ['e2e4', 'e7e5'],
+      kind: 'pieceEnPrise', phrase: 'Фигура осталась без защиты', loss: 0.3 });
+    await db.reviews.put({ puzzleId: 'g:x:5', stage: 0, dueDay: today() });
+    renderAt('/run/review');
+    expect(await screen.findByText('Из твоей партии')).toBeTruthy();
+    expect(screen.getByText('1 из 1')).toBeTruthy();
+    expect(await db.reviews.get('g:x:5')).toBeTruthy();
+  });
+
+  it('запись повторения задачи из партии, которой больше нет (после смены ника): экран открывается, запись удалена',
+    async () => {
+      await db.gamePuzzles.put({ id: 'g:x:5', gameId: 'x', ply: 5, endTime: 100,
+        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', moves: ['e2e4', 'e7e5'],
+        kind: 'pieceEnPrise', phrase: 'Фигура осталась без защиты', loss: 0.3 });
+      await changeNick('Owner_Test');
+      // Запись повторения осталась (например, вернулась из резервной копии этапа 1), а задачи уже нет.
+      await db.reviews.put({ puzzleId: 'g:x:5', stage: 0, dueDay: today() });
+      renderAt('/run/review');
+      expect(await screen.findByText('На сегодня всё повторено')).toBeTruthy();
+      await waitFor(async () => expect(await db.reviews.get('g:x:5')).toBeUndefined());
+    });
 
   it('крестик выходит из повторения', async () => {
     await db.reviews.put({ puzzleId: 'c1-pin-3', stage: 1, dueDay: today() });

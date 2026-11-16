@@ -151,6 +151,13 @@ describe('buildPath', () => {
     expect(build(noise)).toEqual(build([]));
   });
 
+  it('уроки «Исправить ошибки» (nodeId game:<id>) не влияют на путь', () => {
+    const p = doneBefore('c1:fork');
+    const games = [row('game:x', 0, 0), row('game:x', 1, 2), row('game:y', 0, 10)];
+    expect(build([...p, ...games])).toEqual(build(p));
+    expect(build(games)).toEqual(build([]));
+  });
+
   it('current ровно один — первый непройденный, даже если дальше есть пройденные узлы', () => {
     const p = [...doneBefore('c1:mateIn1'), ...[0, 1, 2, 3, 4].map((i) => row('c1:hangingPiece', i, 10))];
     const v = build(p);
