@@ -32,6 +32,8 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
   const byId = new Map<string, GameRecord>();
   /** gameId → версия правил сохранённого разбора. */
   const versions = new Map<string, number>();
+  /** Разборы, сохранённые за сеанс: чтение базы, начатое раньше, их не затирает. */
+  const savedVersions = new Map<string, number>();
   let loading: Promise<void> | null = null;
   let started = false;
   let range: string[] = [];
@@ -63,14 +65,29 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
     for (const g of list) byId.set(g.id, g);
     versions.clear();
     for (const a of analyses) versions.set(a.gameId, a.rulesVersion);
+    for (const [id, v] of savedVersions) if (byId.has(id)) versions.set(id, v);
     // Партии больше нет (смена ника) — её разбор бросаем.
     if (job && !byId.has(job.gameId)) job.controller.abort();
     update(counts());
   }
 
+  /** Чтение базы; при сбое запоминание сбрасывается, и следующая попытка читает заново. */
+  function startLoad(): Promise<void> {
+    const p = load();
+    loading = p;
+    p.catch(() => {
+      if (loading === p) loading = null;
+    });
+    return p;
+  }
+
   function ensureLoaded(): Promise<void> {
-    if (!loading) loading = load();
-    return loading;
+    return loading ?? startLoad();
+  }
+
+  /** База не читается: ждущие open получают null, а не висят. */
+  function failOpenings() {
+    for (const id of [...openings.keys()]) settleOpening(id, null);
   }
 
   function listen() {
@@ -135,6 +152,7 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
       if (a && !j.controller.signal.aborted) {
         const old = await getGamePuzzles(game.id);
         await saveAnalysis(a, reconcile(old, selectPuzzles(game, a), a));
+        savedVersions.set(game.id, a.rulesVersion);
         saved = a;
       }
     } catch {
@@ -166,7 +184,7 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
       try {
         await ensureLoaded();
       } catch {
-        loading = null; // прочитать базу не вышло — попробуем при следующем запуске
+        failOpenings(); // прочитать базу не вышло — следующий запуск прочитает заново
         return;
       }
       while (deps.isVisible()) {
@@ -196,11 +214,15 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
     async open(gameId) {
       const pending = openings.get(gameId);
       if (pending) return pending.promise;
-      await ensureLoaded();
-      if (!byId.has(gameId)) return null;
-      if (versions.get(gameId) === CONFIG.RULES_VERSION) {
-        const ready = await getAnalysis(gameId);
-        if (ready && ready.rulesVersion === CONFIG.RULES_VERSION) return ready;
+      try {
+        await ensureLoaded();
+        if (!byId.has(gameId)) return null;
+        if (versions.get(gameId) === CONFIG.RULES_VERSION) {
+          const ready = await getAnalysis(gameId);
+          if (ready && ready.rulesVersion === CONFIG.RULES_VERSION) return ready;
+        }
+      } catch {
+        return null; // open не бросает
       }
       const again = openings.get(gameId);
       if (again) return again.promise;
@@ -221,8 +243,12 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
       kick();
     },
     async refresh() {
-      loading = load();
-      await loading;
+      try {
+        await startLoad();
+      } catch (e) {
+        failOpenings();
+        throw e;
+      }
       kick();
     },
     status: () => snapshot,

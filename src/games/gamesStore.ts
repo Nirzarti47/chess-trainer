@@ -52,7 +52,9 @@ function failure(e: unknown): Partial<GamesState> {
   if (e instanceof ChessComError) {
     if (e.kind === 'offline') return { sync: 'offline', syncError: 'Нет сети, список не обновлён' };
     if (e.kind === 'notFound') return { sync: 'error', syncError: 'Игрок не найден' };
-    return { sync: 'error', syncError: `Chess.com ответил ошибкой: ${e.message}` };
+    // Причина уже может начинаться с «Chess.com ответил» — приставку не повторяем.
+    const reason = e.message.replace(/^Chess\.com ответил кодом /, 'код ');
+    return { sync: 'error', syncError: `Chess.com ответил ошибкой: ${reason}` };
   }
   return { sync: 'error', syncError: `Не удалось загрузить партии: ${describeError(e)}` };
 }

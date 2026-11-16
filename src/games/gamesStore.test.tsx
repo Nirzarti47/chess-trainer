@@ -22,7 +22,7 @@ afterEach(() => {
 
 describe('syncNow', () => {
   it('игрок не найден → error с текстом', async () => {
-    sync.mockRejectedValue(new ChessComError('notFound', 'Игрок не найден'));
+    sync.mockRejectedValue(new ChessComError('notFound', 'текст из ошибки не нужен'));
     const { result } = renderHook(() => useGamesState());
     await act(() => syncNow());
     expect(result.current.sync).toBe('error');
@@ -42,7 +42,14 @@ describe('syncNow', () => {
     const { result } = renderHook(() => useGamesState());
     await act(() => syncNow());
     expect(result.current.sync).toBe('error');
-    expect(result.current.syncError).toBe('Chess.com ответил ошибкой: Chess.com ответил кодом 500');
+    expect(result.current.syncError).toBe('Chess.com ответил ошибкой: код 500');
+  });
+
+  it('плохой ответ с другой причиной → причина без повтора начала', async () => {
+    sync.mockRejectedValue(new ChessComError('bad', 'Неверный список месяцев'));
+    const { result } = renderHook(() => useGamesState());
+    await act(() => syncNow());
+    expect(result.current.syncError).toBe('Chess.com ответил ошибкой: Неверный список месяцев');
   });
 
   it('успех → idle, revision вырос, ход загрузки виден', async () => {

@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { Chess } from 'chess.js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../data/db';
+import * as repo from '../data/gamesRepo';
 import { getAnalysis, getGamePuzzles, putGames, saveAnalysis } from '../data/gamesRepo';
 import type { GameAnalysis, GameRecord, SideSummary, TimeClass } from '../domain/gameTypes';
 import type { AnalysisEngine, AnalysisPriority } from '../engine/analysisEngine';
@@ -12,6 +13,10 @@ import { tableEngine } from './testEngine';
 beforeEach(async () => {
   await db.delete();
   await db.open();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 const CYCLE = ['g1f3', 'g8f6', 'f3g1', 'f6g8'];
@@ -251,6 +256,90 @@ describe('очередь разбора', () => {
     await queue.refresh();
     await new Promise(r => setTimeout(r, 30));
     expect(calls).toBe(14);
+  });
+
+  it('партию дважды подряд прерывает потеря видимости: сбоем это не считается', async () => {
+    await putGames([game('a', 100)]);
+    let hide = () => {};
+    let n = 0;
+    const { engine } = spyEngine(() => {
+      // третий запрос первой попытки и третий запрос второй
+      if (++n === 3 || n === 6) hide();
+    });
+    const { queue, setVisible } = makeQueue(engine);
+    hide = () => setVisible(false);
+    queue.start();
+    await vi.waitFor(() => expect(n).toBe(3));
+    await vi.waitFor(() => expect(queue.status().running).toBeNull());
+    setVisible(true);
+    await vi.waitFor(() => {
+      expect(n).toBeGreaterThanOrEqual(6);
+      expect(queue.status().running).toBeNull();
+    });
+    expect(await getAnalysis('a')).toBeUndefined();
+    setVisible(true);
+    await idle(queue, 1);
+    expect(await getAnalysis('a')).toBeDefined();
+    expect(queue.status().lastError).toBeNull();
+  });
+
+  it('прерванная open другой партии не уходит в конец очереди', async () => {
+    await putGames([game('r1', 200), game('r2', 100), game('b', 50, 'blitz')]);
+    let opened = null as Promise<GameAnalysis | null> | null;
+    let queue!: AnalysisQueue;
+    const { engine } = spyEngine(() => {
+      if (!opened && queue.status().running?.gameId === 'r1') opened = queue.open('b');
+    });
+    queue = makeQueue(engine).queue;
+    const order = trackRuns(queue);
+    queue.start();
+    await idle(queue, 3);
+    expect((await opened)?.gameId).toBe('b');
+    expect(order).toEqual(['r1', 'b', 'r1', 'r2']);
+    expect(queue.status().lastError).toBeNull();
+  });
+
+  it('refresh, чьё чтение базы перекрылось с сохранением разбора, не вызывает повторный разбор', async () => {
+    await putGames([game('a', 100)]);
+    const real = repo.getAnalyses;
+    let reads = 0;
+    let release = () => {};
+    const gate = new Promise<void>(r => { release = r; });
+    // чтение refresh берёт данные до сохранения, а возвращает их после
+    vi.spyOn(repo, 'getAnalyses').mockImplementation(async () => {
+      const rows = await real();
+      if (++reads === 2) await gate;
+      return rows;
+    });
+    let queue!: AnalysisQueue;
+    let refreshing: Promise<void> | null = null;
+    let n = 0;
+    const { engine, calls } = spyEngine(() => {
+      if (++n === 2) refreshing = queue.refresh();
+    });
+    queue = makeQueue(engine).queue;
+    const analysedSeen: number[] = [];
+    queue.subscribe(() => analysedSeen.push(queue.status().analysed));
+    queue.start();
+    await vi.waitFor(async () => expect(await getAnalysis('a')).toBeDefined());
+    await idle(queue, 1);
+    const callsAfterAnalysis = calls.length;
+    release();
+    await refreshing;
+    await new Promise(r => setTimeout(r, 30));
+    expect(reads).toBe(2);
+    expect(calls).toHaveLength(callsAfterAnalysis);
+    expect(queue.status().analysed).toBe(1);
+    expect(Math.min(...analysedSeen.slice(analysedSeen.lastIndexOf(1)))).toBe(1);
+  });
+
+  it('сбой чтения базы: open возвращает null, следующий open читает заново и разбирает', async () => {
+    await putGames([game('a', 100, 'blitz')]);
+    vi.spyOn(repo, 'getGames').mockRejectedValueOnce(new Error('база недоступна'));
+    const { queue } = makeQueue(spyEngine().engine);
+    expect(await queue.open('a')).toBeNull();
+    expect((await queue.open('a'))?.gameId).toBe('a');
+    expect(queue.status().analysed).toBe(1);
   });
 
   it('подписчик слышит смену running и analysed; снимок стабилен между изменениями', async () => {
