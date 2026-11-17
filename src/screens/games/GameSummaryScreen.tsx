@@ -17,7 +17,7 @@ type Phase =
   | { kind: 'running'; game: GameRecord }
   /** text — сбой разбора, запомненный в момент ответа open. */
   | { kind: 'failed'; game: GameRecord; text: string }
-  | { kind: 'ready'; game: GameRecord; analysis: GameAnalysis; hasPuzzles: boolean };
+  | { kind: 'ready'; game: GameRecord; analysis: GameAnalysis; puzzleCount: number };
 
 /** Когда очередь не назвала причину сбоя. */
 const FAILED_FALLBACK = 'Попробуй ещё раз чуть позже';
@@ -71,8 +71,8 @@ export function GameSummaryScreen() {
           return;
         }
       }
-      const hasPuzzles = (await getGamePuzzles(gameId)).length > 0;
-      if (alive) setPhase({ kind: 'ready', game, analysis, hasPuzzles });
+      const puzzleCount = (await getGamePuzzles(gameId)).length;
+      if (alive) setPhase({ kind: 'ready', game, analysis, puzzleCount });
     })().catch((e: unknown) => {
       console.error('Не удалось открыть партию', e);
       if (alive) setPhase({ kind: 'dbError', text: describeError(e) });
@@ -137,7 +137,7 @@ export function GameSummaryScreen() {
     );
   }
 
-  const { analysis, hasPuzzles } = phase;
+  const { analysis, puzzleCount } = phase;
   const mine = analysis[game.userColor];
   const theirs = analysis[game.userColor === 'white' ? 'black' : 'white'];
   const rows: Array<[string, number, number]> = [];
@@ -151,6 +151,7 @@ export function GameSummaryScreen() {
     ['Грубые ошибки', mine.grades.blunder, theirs.grades.blunder],
   );
   const advice = topKinds(game, analysis);
+  const hasMistakes = mine.grades.mistake + mine.grades.blunder > 0;
 
   return (
     <section className="summary">
@@ -177,10 +178,15 @@ export function GameSummaryScreen() {
         </div>
       )}
       <p className="summary-took">Разбор занял {Math.round(analysis.tookMs / 1000)} с</p>
+      {puzzleCount === 0 && hasMistakes && (
+        <p className="summary-took">Задач из этой партии нет: ни в одной ошибке не нашлось одного ясно лучшего хода</p>
+      )}
       <div className="summary-actions">
         <BigButton onClick={() => navigate(`/games/${game.id}/review`)}>Смотреть разбор</BigButton>
-        {hasPuzzles && (
-          <BigButton variant="surface" onClick={() => navigate(`/games/${game.id}/fix`)}>Исправить ошибки</BigButton>
+        {puzzleCount > 0 && (
+          <BigButton variant="surface" onClick={() => navigate(`/games/${game.id}/fix`)}>
+            {`Исправить ошибки (${puzzleCount})`}
+          </BigButton>
         )}
       </div>
     </section>

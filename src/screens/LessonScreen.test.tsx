@@ -648,6 +648,17 @@ describe('TaskRunner: задача из партии', () => {
       .toBe('/games/x/review?ply=5');
   });
 
+  it('общая фраза «Лучше было сыграть так» не показывается, ссылка остаётся', async () => {
+    const task = gamePz(5);
+    if (task.kind === 'puzzle' && task.puzzle.game) task.puzzle.game.phrase = 'Лучше было сыграть так';
+    renderTask(task);
+    await waitInteractive(P1);
+    move('e7e5');
+    expect(await screen.findByText('Верно')).toBeTruthy();
+    expect(screen.queryByText('Лучше было сыграть так')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Открыть этот ход в разборе' })).toBeTruthy();
+  });
+
   it('после показа решения тоже видны фраза и ссылка', async () => {
     renderTask(gamePz(5));
     await waitInteractive(P1);

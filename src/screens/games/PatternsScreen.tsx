@@ -49,7 +49,9 @@ export function PatternsScreen() {
     const games = gamesInRange(data.games, range, Date.now());
     const current = new Set(data.analyses.filter((a) => a.rulesVersion === CONFIG.RULES_VERSION).map((a) => a.gameId));
     const pending = games.filter((g) => !current.has(g.id)).map((g) => g.id);
-    const counts = countKinds(games, data.analyses);
+    // «Другое» всегда последней строкой, сколько бы его ни было
+    const all = countKinds(games, data.analyses);
+    const counts = [...all.filter((c) => c.kind !== 'other'), ...all.filter((c) => c.kind === 'other')];
     return { total: games.length, analysed: games.length - pending.length, pending, counts,
       mistakes: counts.reduce((s, c) => s + c.count, 0) };
   }, [range, data]);
@@ -84,7 +86,7 @@ export function PatternsScreen() {
   }
   if (!range || !view) return <section className="patterns" aria-busy="true">{header}</section>;
 
-  const top = view.counts[0]?.count ?? 0;
+  const top = Math.max(0, ...view.counts.map((c) => c.count));
   return (
     <section className="patterns">
       {header}
@@ -103,8 +105,7 @@ export function PatternsScreen() {
       ))}
 
       <div className="patterns-status">
-        <p>Партий: {view.total}, разобрано: {view.analysed}</p>
-        {view.analysed < view.total && <p role="status">Разобрано {view.analysed} из {view.total}, считаю дальше</p>}
+        <p role="status">Партий: {view.total}, разобрано: {view.analysed}{view.analysed < view.total && ' — считаю дальше'}</p>
         {view.total > 0 && tooFew(view.analysed, view.mistakes) && <p>Мало партий, выводы неточные</p>}
       </div>
 

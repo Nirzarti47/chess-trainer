@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Chess } from 'chess.js';
 import { Link } from 'react-router-dom';
+import { OTHER_PHRASE } from '../analysis/phrases';
 import { bestReply as engineBestReply } from '../engine/engine';
 import { legalDests, resultOf, sideToMove, startPuzzle, takeHint, tryMove } from '../domain/puzzle';
 import type { AuthoredTask, ChoiceQuestion, ExplainStep, LessonTask, Puzzle, TaskResult } from '../domain/types';
@@ -197,7 +198,7 @@ function PuzzleTask({ puzzle, title, onDone, bestReply }: {
           {feedback === 'wrongReply' && <Verdict ok={false}>Не тот ход. Соперник ответит так</Verdict>}
           {done && puzzle.game && (
             <>
-              <p className="task-text">{puzzle.game.phrase}</p>
+              {puzzle.game.phrase !== OTHER_PHRASE && <p className="task-text">{puzzle.game.phrase}</p>}
               <Link className="task-link" to={`/games/${puzzle.game.gameId}/review?ply=${puzzle.game.ply}`}>
                 Открыть этот ход в разборе
               </Link>

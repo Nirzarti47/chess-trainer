@@ -171,7 +171,14 @@ describe('GamesScreen: список', () => {
 
     store.state = { ...IDLE, queue: { total: 94, analysed: 15, running: { gameId: 'x', done: 1, total: 2 }, lastError: null } };
     renderGames();
-    expect(await screen.findByText('Идёт разбор…')).toBeTruthy();
+    expect(await screen.findByText('Идёт разбор: разобрано 2 из 2')).toBeTruthy();
+  });
+
+  it('Л10: разбор считает только рапид и по переписке; блиц и старая версия разбора не в счёт', async () => {
+    await putGames([game('fresh', { endTime: Date.UTC(2026, 10, 14, 12) })]);
+    store.state = { ...IDLE, queue: { total: 4, analysed: 2, running: { gameId: 'fresh', done: 1, total: 2 }, lastError: null } };
+    renderGames();
+    expect(await screen.findByText('Идёт разбор: разобрано 2 из 3')).toBeTruthy();
   });
 
   it('загрузка показывает ход; ошибка — текст и «Повторить»', async () => {

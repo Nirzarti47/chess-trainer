@@ -134,12 +134,46 @@ describe('GameSummaryScreen', () => {
     await saveAnalysis(analysis('g1', side(), side()), { put: [], removeIds: [] });
     const first = renderSummary();
     await screen.findByRole('button', { name: 'Смотреть разбор' });
-    expect(screen.queryByRole('button', { name: 'Исправить ошибки' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Исправить ошибки/ })).toBeNull();
     first.unmount();
     await saveAnalysis(analysis('g1', side(), side()), { put: [puzzle('g1', 3)], removeIds: [] });
     renderSummary();
-    fireEvent.click(await screen.findByRole('button', { name: 'Исправить ошибки' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Исправить ошибки (1)' }));
     expect(screen.getByTestId('where').textContent).toBe('/games/g1/fix');
+  });
+
+  it('Л6: на кнопке число задач', async () => {
+    await putGames([game('g1')]);
+    await saveAnalysis(analysis('g1', side({ grades: grades({ mistake: 2 }) }), side()),
+      { put: [puzzle('g1', 3), puzzle('g1', 7)], removeIds: [] });
+    renderSummary();
+    expect(await screen.findByRole('button', { name: 'Исправить ошибки (2)' })).toBeTruthy();
+    expect(screen.queryByText(/Задач из этой партии нет/)).toBeNull();
+  });
+
+  it('Л6: ошибки есть, а задач нет — вместо кнопки пояснение; без ошибок пояснения нет', async () => {
+    await putGames([game('g1')]);
+    await saveAnalysis(analysis('g1', side({ grades: grades({ blunder: 1 }) }), side()), { put: [], removeIds: [] });
+    const first = renderSummary();
+    expect(await screen.findByText(
+      'Задач из этой партии нет: ни в одной ошибке не нашлось одного ясно лучшего хода')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Исправить ошибки/ })).toBeNull();
+    first.unmount();
+    await saveAnalysis(analysis('g1', side({ grades: grades({ best: 5 }) }), side({ grades: grades({ mistake: 3 }) })),
+      { put: [], removeIds: [] });
+    renderSummary();
+    await screen.findByRole('button', { name: 'Смотреть разбор' });
+    expect(screen.queryByText(/Задач из этой партии нет/)).toBeNull();
+  });
+
+  it('Л7: пока партия разбирается — только шапка, полоса и подпись, без таблицы и пустого блока', async () => {
+    await putGames([game('g1')]);
+    const { container } = renderSummary();
+    await screen.findByText('Разбираю партию…');
+    expect(container.querySelector('table')).toBeNull();
+    const section = container.querySelector('section.summary') as HTMLElement;
+    expect([...section.children].map((c) => c.tagName + (c.className ? '.' + c.className : ''))).toEqual(
+      ['HEADER.summary-head', 'DIV.progress-bar', 'P.summary-note']);
   });
 
   it('«Смотреть разбор» ведёт на разбор', async () => {

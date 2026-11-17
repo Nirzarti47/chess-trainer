@@ -86,7 +86,7 @@ describe('PatternsScreen', () => {
 
   it('по умолчанию «Последние 20»; две подписанные группы; партии промежутка и очередь', async () => {
     renderPatterns();
-    expect(await screen.findByText('Партий: 6, разобрано: 2')).toBeTruthy();
+    expect(await screen.findByText('Партий: 6, разобрано: 2 — считаю дальше')).toBeTruthy();
     expect(pressed('Последние 20')).toBe('true');
     expect(pressed('За месяц')).toBe('false');
     expect(within(screen.getByRole('group', { name: 'По числу партий' })).getAllByRole('button')).toHaveLength(3);
@@ -97,12 +97,12 @@ describe('PatternsScreen', () => {
 
   it('выбор «За месяц» сохраняется и ставит в очередь неразобранные партии месяца', async () => {
     renderPatterns();
-    await screen.findByText('Партий: 6, разобрано: 2');
+    await screen.findByText('Партий: 6, разобрано: 2 — считаю дальше');
     fireEvent.click(screen.getByRole('button', { name: 'За месяц' }));
-    expect(await screen.findByText('Партий: 5, разобрано: 2')).toBeTruthy();
+    expect(await screen.findByText('Партий: 5, разобрано: 2 — считаю дальше')).toBeTruthy();
     expect(pressed('За месяц')).toBe('true');
     expect(pressed('Последние 20')).toBe('false');
-    expect(screen.getByText('Разобрано 2 из 5, считаю дальше')).toBeTruthy();
+    expect(screen.getByText('Партий: 5, разобрано: 2 — считаю дальше')).toBeTruthy();
     expect(store.setRange).toHaveBeenLastCalledWith(['g2', 'g4', 'g5']);
     await waitFor(async () => expect(await getPatternRange()).toEqual({ by: 'time', span: 'month' }));
   });
@@ -110,12 +110,41 @@ describe('PatternsScreen', () => {
   it('две разобранные партии: «Мало партий, выводы неточные»; виды по убыванию с числами', async () => {
     renderPatterns();
     expect(await screen.findByText('Мало партий, выводы неточные')).toBeTruthy();
-    expect(rows()).toEqual(['Фигура поставлена под бой3', 'Другое2', 'Пропущен мат1', 'Пропущена вилка1']);
+    expect(rows()).toEqual(['Фигура поставлена под бой3', 'Пропущен мат1', 'Пропущена вилка1', 'Другое2']);
+  });
+
+  it('Л9: «Другое» последней строкой, даже если его больше всех', async () => {
+    await db.delete();
+    await db.open();
+    await putGames([game('o1', 1)]);
+    await save(analysis('o1', ['other', 'other', 'other', 'pieceEnPrise']));
+    renderPatterns();
+    await screen.findByRole('list', { name: 'Виды ошибок' });
+    expect(rows()).toEqual(['Фигура поставлена под бой1', 'Другое3']);
+  });
+
+  it('Л9: все разобраны — в строке состояния нет «считаю дальше»; одна строка вместо двух', async () => {
+    await db.delete();
+    await db.open();
+    await putGames([game('o1', 1)]);
+    await save(analysis('o1', ['other']));
+    renderPatterns();
+    expect(await screen.findByText('Партий: 1, разобрано: 1')).toBeTruthy();
+    expect(screen.queryByText(/считаю дальше/)).toBeNull();
+  });
+
+  it('Л9: партии есть, разборов нет — «Тренировать» выключена', async () => {
+    await db.delete();
+    await db.open();
+    await putGames([game('o1', 1), game('o2', 2)]);
+    renderPatterns();
+    expect(await screen.findByText('Партий: 2, разобрано: 0 — считаю дальше')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Тренировать' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('«Тренировать» ведёт на /games/patterns/train; ссылка назад — к партиям', async () => {
     renderPatterns();
-    await screen.findByText('Партий: 6, разобрано: 2');
+    await screen.findByText('Партий: 6, разобрано: 2 — считаю дальше');
     fireEvent.click(screen.getByRole('button', { name: 'Тренировать' }));
     expect(screen.getByTestId('where').textContent).toBe('/games/patterns/train');
   });
@@ -128,18 +157,18 @@ describe('PatternsScreen', () => {
 
   it('новый разбор (рост revision) перечитывает данные; setRange получает укороченный список', async () => {
     const { rerender } = renderPatterns();
-    await screen.findByText('Партий: 6, разобрано: 2');
+    await screen.findByText('Партий: 6, разобрано: 2 — считаю дальше');
     await waitFor(() => expect(store.setRange).toHaveBeenLastCalledWith(['g2', 'g4', 'g5', 'g6']));
     await save(analysis('g2', ['missedMate']));
     store.state = { ...IDLE, revision: 1 };
     rerender(rerenderTree);
-    expect(await screen.findByText('Партий: 6, разобрано: 3')).toBeTruthy();
+    expect(await screen.findByText('Партий: 6, разобрано: 3 — считаю дальше')).toBeTruthy();
     expect(store.setRange).toHaveBeenLastCalledWith(['g4', 'g5', 'g6']);
   });
 
   it('повторный показ без смены набора неразобранных партий setRange снова не вызывает', async () => {
     const { rerender } = renderPatterns();
-    await screen.findByText('Партий: 6, разобрано: 2');
+    await screen.findByText('Партий: 6, разобрано: 2 — считаю дальше');
     await waitFor(() => expect(store.setRange).toHaveBeenCalledTimes(1));
     // Разбор уже разобранной g1 сменился: данные перечитаны, а набор неразобранных тот же.
     await save(analysis('g1', ['missedMate', 'missedMate', 'missedMate', 'missedMate', 'missedMate']));

@@ -117,3 +117,6 @@
 }
 
 .summary-actions .big-button { flex: 1; }
+
+/* Полоса разбора не растёт на весь экран: у общего .progress-bar стоит flex: 1 */
+.summary .progress-bar { flex: none; }

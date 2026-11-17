@@ -124,7 +124,12 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
       ? `Загружаю партии: ${state.syncProgress.done} из ${state.syncProgress.total}` : 'Загружаю партии…';
   } else if (state.sync === 'offline') status = 'Нет сети, список не обновлён';
   else if (state.sync === 'error') status = state.syncError ?? 'Не удалось загрузить партии';
-  else if (queue.running) status = 'Идёт разбор…';
+  else if (queue.running) {
+    // сами в фоне разбираются только рапид и партии по переписке; в очереди этих чисел нет
+    const own = (games ?? []).filter((g) => g.timeClass === 'rapid' || g.timeClass === 'daily');
+    const done = own.filter((g) => analyses.get(g.id)?.rulesVersion === CONFIG.RULES_VERSION).length;
+    status = `Идёт разбор: разобрано ${done} из ${own.length}`;
+  }
   else status = `Разобрано ${queue.analysed} из ${queue.total}`;
 
   return (
