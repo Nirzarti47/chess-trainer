@@ -5,6 +5,7 @@ import { getAnalyses, getChessUser, getGames } from '../../data/gamesRepo';
 import type { ChessUser, GameAnalysis, GameRecord, TimeClass } from '../../domain/gameTypes';
 import { syncNow, useGamesState } from '../../games/gamesStore';
 import { BigButton } from '../../ui/BigButton';
+import { describeError } from '../lessonErrors';
 import { NickForm } from './NickForm';
 import './GamesScreen.css';
 
@@ -58,6 +59,8 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
   const [games, setGames] = useState<GameRecord[] | null>(null);
   const [analyses, setAnalyses] = useState<Map<string, GameAnalysis>>(new Map());
   const [failed, setFailed] = useState<string | null>(null);
+  /** Сбой чтения ника после сохранения: текст для экрана. */
+  const [userError, setUserError] = useState<string | null>(null);
 
   // Список перечитывается из базы, когда растёт revision.
   useEffect(() => {
@@ -79,9 +82,10 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
   async function reloadUser() {
     try {
       setUser(await getChessUser());
+      setUserError(null);
     } catch (e: unknown) {
-      // Экран остаётся в прежнем состоянии.
       console.error('Не удалось прочитать ник', e);
+      setUserError(`Не удалось прочитать ник: ${describeError(e)}`);
     }
   }
 
@@ -93,6 +97,16 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
   if (user === undefined) return <section className="games" aria-busy="true" />;
 
   if (!user) {
+    // Ник уже сохранён, но перечитать его не вышло: форма не нужна, нужен повтор чтения.
+    if (userError) {
+      return (
+        <section className="games">
+          <h1>Партии</h1>
+          <p className="games-note" role="alert">{userError}</p>
+          <BigButton variant="surface" onClick={() => void reloadUser()}>Повторить</BigButton>
+        </section>
+      );
+    }
     return (
       <section className="games">
         <h1>Партии</h1>

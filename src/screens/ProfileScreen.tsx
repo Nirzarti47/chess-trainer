@@ -145,7 +145,8 @@ function NickRow({ readUser = getChessUser, ...deps }: NickDeps) {
       {open && ready && (
         <Sheet label="Смена ника" onClose={() => setOpen(false)}>
           {nick && <p className="sheet-text">Партии и задачи из них для прежнего ника будут удалены</p>}
-          <NickForm current={nick ?? undefined} onSaved={() => setOpen(false)} {...deps} />
+          {/* Прежний ник больше не верен: строка ждёт нового чтения выключенной. */}
+          <NickForm current={nick ?? undefined} onSaved={() => { setNick(undefined); setOpen(false); }} {...deps} />
         </Sheet>
       )}
     </>

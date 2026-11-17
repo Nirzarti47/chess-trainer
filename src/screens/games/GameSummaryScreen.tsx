@@ -15,8 +15,12 @@ type Phase =
   | { kind: 'notFound' }
   | { kind: 'dbError'; text: string }
   | { kind: 'running'; game: GameRecord }
-  | { kind: 'failed'; game: GameRecord }
+  /** text — сбой разбора, запомненный в момент ответа open. */
+  | { kind: 'failed'; game: GameRecord; text: string }
   | { kind: 'ready'; game: GameRecord; analysis: GameAnalysis; hasPuzzles: boolean };
+
+/** Когда очередь не назвала причину сбоя. */
+const FAILED_FALLBACK = 'Попробуй ещё раз чуть позже';
 
 /** «1 раз», «2 раза», «5 раз». */
 function times(n: number): string {
@@ -62,7 +66,8 @@ export function GameSummaryScreen() {
         analysis = (await gamesQueue.open(gameId)) ?? undefined;
         if (!alive) return;
         if (!analysis) {
-          setPhase({ kind: 'failed', game });
+          // lastError у очереди общий: берём его сейчас, позже он может смениться из-за другой партии.
+          setPhase({ kind: 'failed', game, text: gamesQueue.status().lastError || FAILED_FALLBACK });
           return;
         }
       }
@@ -92,6 +97,7 @@ export function GameSummaryScreen() {
         <h1>Не удалось открыть партию</h1>
         <p className="summary-note">{phase.text}</p>
         <BigButton variant="surface" onClick={() => setAttempt((n) => n + 1)}>Повторить</BigButton>
+        <BigButton variant="surface" onClick={() => navigate('/games')}>К партиям</BigButton>
       </section>
     );
   }
@@ -108,11 +114,13 @@ export function GameSummaryScreen() {
   );
 
   if (phase.kind === 'running') {
+    // Очередь может считать другую партию: её прогресс здесь не показываем.
     const { running } = state.queue;
+    const mine = running?.gameId === game.id ? running : null;
     return (
       <section className="summary">
         {header}
-        <ProgressBar value={running && running.total > 0 ? running.done / running.total : 0} label="Разбираю партию…" />
+        <ProgressBar value={mine && mine.total > 0 ? mine.done / mine.total : 0} label="Ход разбора" />
         <p className="summary-note" role="status">Разбираю партию…</p>
       </section>
     );
@@ -123,7 +131,7 @@ export function GameSummaryScreen() {
       <section className="summary">
         {header}
         <h2>Не удалось разобрать партию</h2>
-        {state.queue.lastError && <p className="summary-note">{state.queue.lastError}</p>}
+        <p className="summary-note">{phase.text}</p>
         <BigButton variant="surface" onClick={() => setAttempt((n) => n + 1)}>Повторить</BigButton>
       </section>
     );

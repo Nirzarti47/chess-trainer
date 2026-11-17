@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ChessComError, fetchArchives, fetchPlayer, normalizeNick, toGameRecord } from './api';
 import archives from './fixtures/archives.json';
 import month from './fixtures/month.json';
@@ -77,5 +77,47 @@ describe('запросы', () => {
 
   it('fetchArchives: неверная форма ответа — bad', async () => {
     await expect(fetchArchives('owner_test', reply(200, { x: 1 }))).rejects.toMatchObject({ kind: 'bad' });
+  });
+
+  it('fetchArchives: адрес с посторонним хвостом молча отбрасывается', async () => {
+    const list = { archives: [
+      'https://api.chess.com/pub/player/owner_test/games/2026/10',
+      'https://api.chess.com/pub/player/owner_test/games/2026/11?x=../../../other',
+      'https://api.chess.com/pub/player/owner_test/games/2026/09',
+    ] };
+    expect(await fetchArchives('owner_test', reply(200, list))).toEqual(['2026/09', '2026/10']);
+  });
+
+  it('fetch бросает не TypeError (DOMException) — ChessComError вида bad', async () => {
+    const failing = (async () => { throw new DOMException('Отказано', 'SecurityError'); }) as typeof fetch;
+    const err = await fetchPlayer('owner_test', failing).catch(x => x);
+    expect(err).toBeInstanceOf(ChessComError);
+    expect(err.kind).toBe('bad');
+  });
+
+  it('fetch бросает, а сеть за время запроса пропала — offline', async () => {
+    const onLine = vi.spyOn(navigator, 'onLine', 'get');
+    try {
+      const failing = (async () => {
+        onLine.mockReturnValue(false);
+        throw new DOMException('Прервано', 'NetworkError');
+      }) as typeof fetch;
+      const err = await fetchPlayer('owner_test', failing).catch(x => x);
+      expect(err).toBeInstanceOf(ChessComError);
+      expect(err.kind).toBe('offline');
+    } finally {
+      onLine.mockRestore();
+    }
+  });
+
+  it('navigator.onLine === false — offline без запроса', async () => {
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      const fetchFn = vi.fn(reply(200));
+      await expect(fetchPlayer('owner_test', fetchFn)).rejects.toMatchObject({ kind: 'offline' });
+      expect(fetchFn).not.toHaveBeenCalled();
+    } finally {
+      onLine.mockRestore();
+    }
   });
 });

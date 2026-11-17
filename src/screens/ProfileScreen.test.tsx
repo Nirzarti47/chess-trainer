@@ -9,6 +9,7 @@ import { gamesQueue } from '../games/gamesStore';
 import { setChessUser } from '../data/gamesRepo';
 import { getProfile } from '../data/repo';
 import { addDays, localDay } from '../domain/dates';
+import type { ChessUser } from '../domain/gameTypes';
 import type { Profile } from '../domain/types';
 import { AboutScreen, REPO_URL } from './AboutScreen';
 import { BackupScreen, RELOAD_DELAY_MS } from './BackupScreen';
@@ -470,6 +471,26 @@ describe('Профиль: ник', () => {
     fireEvent.click(row);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByRole('button', { name: /Подключить Chess.com/ })).toBeNull();
+  });
+
+  it('после смены ника, пока новый не прочитан, строка ника выключена и без прежнего ника', async () => {
+    // Первое чтение отдаёт прежний ник, второе (после сохранения) не отвечает.
+    const readUser = vi.fn<() => Promise<ChessUser | null>>()
+      .mockResolvedValueOnce({ nick: 'owner_test', loadedThrough: null })
+      .mockReturnValue(new Promise<never>(() => {}));
+    render(
+      <MemoryRouter initialEntries={['/profile']}>
+        <ProfileScreen fetchPlayer={fetchPlayer} sync={sync} change={change} readUser={readUser} />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /Ник на Chess.com: owner_test/ }));
+    fireEvent.change(screen.getByLabelText('Ник на Chess.com'), { target: { value: 'rival_one' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Сменить ник' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const row = screen.getByRole('button', { name: /Ник на Chess.com/ });
+    expect((row as HTMLButtonElement).disabled).toBe(true);
+    expect(row.textContent).not.toContain('owner_test');
+    expect(readUser).toHaveBeenCalledTimes(2);
   });
 
   it('сбой чтения ника: виден текст сбоя, лист не открывается', async () => {

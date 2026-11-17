@@ -19,16 +19,17 @@ export class ChessComError extends Error {
 
 export const normalizeNick = (raw: string): string => raw.trim().toLowerCase();
 
+const offline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+
 async function get(url: string, fetchFn: typeof fetch): Promise<Response> {
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    throw new ChessComError('offline', 'Нет сети');
-  }
+  if (offline()) throw new ChessComError('offline', 'Нет сети');
   let res: Response;
   try {
     res = await fetchFn(url);
   } catch (e) {
-    if (e instanceof TypeError) throw new ChessComError('offline', 'Нет сети');
-    throw e;
+    // TypeError — обрыв сети; любой другой сбой запроса тоже становится ChessComError.
+    if (e instanceof TypeError || offline()) throw new ChessComError('offline', 'Нет сети');
+    throw new ChessComError('bad', `сбой запроса (${e instanceof Error ? `${e.name}: ${e.message}` : String(e)})`);
   }
   if (res.status === 404) throw new ChessComError('notFound', 'Игрок не найден');
   if (res.status !== 200) throw new ChessComError('bad', `Chess.com ответил кодом ${res.status}`);
@@ -48,14 +49,17 @@ export async function fetchPlayer(nick: string, fetchFn: typeof fetch = fetch): 
   await get(`${BASE}/${encodeURIComponent(nick)}`, fetchFn);
 }
 
-/** Месяцы вида '2023/01' по возрастанию. */
+/** Хвост адреса месяца: `/games/ГГГГ/ММ`. */
+const MONTH_TAIL = /\/games\/(\d{4}\/\d{2})$/;
+
+/** Месяцы вида '2023/01' по возрастанию. Адреса с другим хвостом отбрасываются: месяц идёт в следующий запрос. */
 export async function fetchArchives(nick: string, fetchFn: typeof fetch = fetch): Promise<string[]> {
   const data = await getJson(`${BASE}/${encodeURIComponent(nick)}/games/archives`, fetchFn);
   const list = (data as { archives?: unknown } | null)?.archives;
   if (!Array.isArray(list) || !list.every(u => typeof u === 'string')) {
     throw new ChessComError('bad', 'Неверный список месяцев');
   }
-  return (list as string[]).map(u => u.split('/').slice(-2).join('/')).sort();
+  return (list as string[]).flatMap(u => MONTH_TAIL.exec(u)?.[1] ?? []).sort();
 }
 
 export async function fetchMonth(nick: string, month: string, fetchFn: typeof fetch = fetch): Promise<unknown[]> {

@@ -90,6 +90,21 @@ describe('GamesScreen: ник', () => {
     expect(sync).not.toHaveBeenCalled();
   });
 
+  it('ник сохранён, а перечитать его не вышло: текст сбоя и «Повторить», повтор открывает список', async () => {
+    renderGames();
+    fireEvent.change(await screen.findByLabelText('Ник на Chess.com'), { target: { value: 'owner_test' } });
+    const get = vi.spyOn(db.kv, 'get').mockRejectedValueOnce(new Error('база закрыта'));
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Найти партии' }));
+      expect(await screen.findByText('Не удалось прочитать ник: Error: база закрыта')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+      expect(await screen.findByRole('button', { name: 'Обновить' })).toBeTruthy();
+      expect(screen.queryByText(/Не удалось прочитать ник/)).toBeNull();
+    } finally {
+      get.mockRestore();
+    }
+  });
+
   it('без сети: подсказка проверить интернет', async () => {
     fetchPlayer.mockRejectedValue(new ChessComError('offline', 'нет сети'));
     renderGames();

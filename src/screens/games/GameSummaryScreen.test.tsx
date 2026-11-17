@@ -8,12 +8,12 @@ import type { GameAnalysis, GamePuzzle, GameRecord, Grade, MistakeKind, MoveRevi
 import type { GamesState } from '../../games/gamesStore';
 import { GameSummaryScreen } from './GameSummaryScreen';
 
-// Состояние и очередь подменяются; база настоящая.
+// Состояние и очередь подменяются; база настоящая. status() очереди отдаёт то же состояние, что и экран.
 const store = vi.hoisted(() => ({ state: null as unknown, open: vi.fn() }));
 vi.mock('../../games/gamesStore', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../games/gamesStore')>()),
   useGamesState: () => store.state as GamesState,
-  gamesQueue: { open: store.open },
+  gamesQueue: { open: store.open, status: () => (store.state as GamesState).queue },
 }));
 
 const IDLE: GamesState = {
@@ -51,16 +51,21 @@ function Where() {
   return <p data-testid="where">{useLocation().pathname}</p>;
 }
 
+const summaryTree = (id = 'g1') => (
+  <MemoryRouter initialEntries={['/games/' + id]}>
+    <Routes>
+      <Route path="/games/:gameId" element={<GameSummaryScreen />} />
+      <Route path="*" element={<Where />} />
+    </Routes>
+  </MemoryRouter>
+);
+
 function renderSummary(id = 'g1') {
-  return render(
-    <MemoryRouter initialEntries={['/games/' + id]}>
-      <Routes>
-        <Route path="/games/:gameId" element={<GameSummaryScreen />} />
-        <Route path="*" element={<Where />} />
-      </Routes>
-    </MemoryRouter>,
-  );
+  return render(summaryTree(id));
 }
+
+const running = (gameId: string, done: number, total: number): GamesState =>
+  ({ ...IDLE, queue: { ...IDLE.queue, running: { gameId, done, total } } });
 
 const cells = (label: string) =>
   within(screen.getByText(label).closest('tr') as HTMLElement).getAllByRole('cell').map((c) => c.textContent);
@@ -154,6 +159,37 @@ describe('GameSummaryScreen', () => {
     await waitFor(() => expect(store.open).toHaveBeenCalledWith('g1'));
   });
 
+  it('полоса берёт прогресс только своей партии: идёт другая — на нуле, идёт эта — её прогресс', async () => {
+    await putGames([game('g1')]);
+    store.state = running('other', 1, 2);
+    const view = renderSummary();
+    await screen.findByText('Разбираю партию…');
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0');
+    store.state = running('g1', 1, 2);
+    view.rerender(summaryTree());
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
+  });
+
+  it('«Разбираю партию…» звучит один раз: у полосы своё название', async () => {
+    await putGames([game('g1')]);
+    renderSummary();
+    expect(await screen.findAllByText('Разбираю партию…')).toHaveLength(1);
+    expect(screen.getByRole('progressbar').getAttribute('aria-label')).not.toBe('Разбираю партию…');
+  });
+
+  it('open вернул null, текста сбоя в очереди нет: запасная фраза; чужой сбой позже её не меняет', async () => {
+    await putGames([game('g1')]);
+    store.open.mockResolvedValueOnce(null);
+    const view = renderSummary();
+    expect(await screen.findByText('Не удалось разобрать партию')).toBeTruthy();
+    expect(screen.getByText('Попробуй ещё раз чуть позже')).toBeTruthy();
+    // Очередь споткнулась на другой партии: общий lastError сменился.
+    store.state = { ...IDLE, queue: { ...IDLE.queue, lastError: 'Движок не ответил' } };
+    view.rerender(summaryTree());
+    expect(screen.getByText('Попробуй ещё раз чуть позже')).toBeTruthy();
+    expect(screen.queryByText('Движок не ответил')).toBeNull();
+  });
+
   it('open вернул null: текст сбоя и «Повторить», повтор вызывает open снова', async () => {
     await putGames([game('g1')]);
     store.state = { ...IDLE, queue: { ...IDLE.queue, lastError: 'Движок не ответил' } };
@@ -181,11 +217,13 @@ describe('GameSummaryScreen', () => {
     expect(store.open).not.toHaveBeenCalled();
   });
 
-  it('сбой чтения базы показывает свой текст', async () => {
+  it('сбой чтения базы показывает свой текст и «К партиям»', async () => {
     await putGames([game('g1')]);
     vi.spyOn(db.games, 'get').mockRejectedValueOnce(new Error('база закрыта'));
     renderSummary();
     expect(await screen.findByText(/Не удалось открыть партию/)).toBeTruthy();
     expect(screen.getByText(/база закрыта/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'К партиям' }));
+    expect(screen.getByTestId('where').textContent).toBe('/games');
   });
 });

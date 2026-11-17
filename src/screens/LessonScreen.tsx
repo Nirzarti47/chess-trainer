@@ -4,6 +4,7 @@ import {
   clearActiveLesson, completeLesson, getLessonProgress, getSeenPuzzleIds, loadActiveLesson, recordTaskResult,
   saveActiveLesson, type ActiveLesson,
 } from '../data/repo';
+import { findPuzzle } from '../data/puzzleStore';
 import { bestReply as engineBestReply, warmUp as engineWarmUp } from '../engine/engine';
 import { puzzleAttempt } from '../domain/attempt';
 import { EXAM_ADVICE_BELOW } from '../domain/path';
@@ -12,6 +13,7 @@ import { XP } from '../domain/xp';
 import { BigButton } from '../ui/BigButton';
 import { ProgressBar } from '../ui/ProgressBar';
 import { Sheet } from '../ui/Sheet';
+import { GAME_NODE_PREFIX } from './gameLessons';
 import { describeError, LessonNotFoundError } from './lessonErrors';
 import { lessonFactory as realLessonFactory } from './lessonFactory';
 import { LessonSummary, type LessonSummaryData } from './LessonSummary';
@@ -143,6 +145,15 @@ function canResume(a: SavedLesson | null, nodeId: string, lessonIndex: number): 
     && a.source !== undefined && a.tasks.length > 0 && a.cursor < a.tasks.length + a.retry.length;
 }
 
+/** Задачи урока из партии живут в базе и пропадают при новом разборе или смене ника.
+ *  Такой урок продолжается, только если все его задачи ещё есть; остальные уроки — как прежде. */
+async function tasksStillExist(a: SavedLesson): Promise<boolean> {
+  if (!a.nodeId.startsWith(GAME_NODE_PREFIX)) return true;
+  const ids = a.tasks.flatMap((t) => (t.kind === 'puzzle' ? [t.puzzle.id] : []));
+  const found = await Promise.all(ids.map((id) => findPuzzle(id)));
+  return found.every((p) => p !== undefined);
+}
+
 /** Экран урока: берёт задания у фабрики (или продолжает сохранённый урок), ведёт их и показывает итог.
  *  exitTo — куда вести по выходу из урока и после итога. */
 export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp, exitTo = '/learn',
@@ -173,8 +184,12 @@ export function LessonScreen({ nodeId: nodeIdProp, lessonIndex: lessonIndexProp,
       if (!nodeId || !Number.isInteger(lessonIndex)) throw new LessonNotFoundError('Неверный адрес урока');
       const saved = (await loadActiveLesson().catch(() => null)) as SavedLesson | null;
       if (canResume(saved, nodeId, lessonIndex)) {
-        const { title, source, tasks, cursor, results, retry } = saved;
-        return { lesson: { title, source, tasks }, resume: { cursor, results, retry } };
+        if (await tasksStillExist(saved)) {
+          const { title, source, tasks, cursor, results, retry } = saved;
+          return { lesson: { title, source, tasks }, resume: { cursor, results, retry } };
+        }
+        // Сохранённый набор устарел: отбрасываем его, урок собирается заново.
+        await clearActiveLesson().catch(() => {});
       }
       const lesson = await factory(nodeId, lessonIndex);
       if (lesson.tasks.length === 0) throw new LessonNotFoundError('В уроке нет заданий');

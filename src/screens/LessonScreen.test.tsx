@@ -567,9 +567,39 @@ describe('RepeatLessonScreen', () => {
     );
   }
 
+  const gp = (ply: number, moves: [string, string]) => ({ id: `g:x:${ply}`, gameId: 'x', ply, endTime: 1,
+    fen: START, moves, kind: 'pieceEnPrise' as const, phrase: PHRASE, loss: 0.3 });
+
+  /** Незаконченный урок «Исправить ошибки» партии x: две задачи, первая уже решена. */
+  const saveHalfDoneGameLesson = () => db.kv.put({ key: 'activeLesson', value: {
+    nodeId: 'game:x', lessonIndex: 0, tasks: [gamePz(5), gamePz(9, P2_MOVES)], cursor: 1, results: ['clean'], retry: [],
+    title: 'Исправить ошибки', source: 'game' } });
+
+  it('незаконченный урок партии, все задачи на месте: продолжается с того же задания', async () => {
+    await db.gamePuzzles.bulkPut([gp(5, ['e2e4', 'e7e5']), gp(9, ['d2d4', 'd7d5'])]);
+    await saveHalfDoneGameLesson();
+    renderRepeat('game:x');
+    await waitInteractive(P2);
+    expect(screen.getByText('2 из 2')).toBeTruthy();
+  });
+
+  it('незаконченный урок партии, одной задачи в базе уже нет: урок собирается заново', async () => {
+    // Партию разобрали заново: задачи хода 9 больше нет.
+    await db.gamePuzzles.put(gp(5, ['e2e4', 'e7e5']));
+    await saveHalfDoneGameLesson();
+    renderRepeat('game:x');
+    await waitInteractive(P1);
+    expect(screen.getByText('1 из 1')).toBeTruthy();
+    await waitFor(async () => expect((await loadActiveLesson())?.tasks).toHaveLength(1));
+  });
+
+  it('незаконченный урок партии, задач в базе нет совсем: «В этой партии нет задач на исправление»', async () => {
+    await saveHalfDoneGameLesson();
+    renderRepeat('game:x');
+    expect(await screen.findByText('В этой партии нет задач на исправление')).toBeTruthy();
+  });
+
   it('урок партии из базы: задачи по ходу партии, номер урока — по числу пройденных', async () => {
-    const gp = (ply: number, moves: [string, string]) => ({ id: `g:x:${ply}`, gameId: 'x', ply, endTime: 1,
-      fen: START, moves, kind: 'pieceEnPrise' as const, phrase: PHRASE, loss: 0.3 });
     await db.gamePuzzles.bulkPut([gp(9, ['d2d4', 'd7d5']), gp(5, ['e2e4', 'e7e5'])]);
     await db.lessons.put({ nodeId: 'game:x', lessonIndex: 0, clean: 0, total: 2 });
     renderRepeat('game:x');
