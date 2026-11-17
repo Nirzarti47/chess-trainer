@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { ChessComError, fetchPlayer as realFetchPlayer, normalizeNick } from '../../chesscom/api';
+import { ChessComError, fetchPlayer as realFetchPlayer, NO_ANSWER, normalizeNick } from '../../chesscom/api';
 import { changeNick, setChessUser } from '../../data/gamesRepo';
 import { gamesQueue, syncNow } from '../../games/gamesStore';
 import { describeError } from '../lessonErrors';
@@ -24,6 +24,7 @@ function errorText(e: unknown): string {
   if (e instanceof ChessComError) {
     if (e.kind === 'notFound') return 'Игрок не найден';
     if (e.kind === 'offline') return 'Нет сети. Проверь интернет и попробуй ещё раз';
+    if (e.kind === 'noAnswer') return NO_ANSWER;
     return `Chess.com ответил ошибкой: ${e.message}`;
   }
   return `Не удалось сохранить ник: ${describeError(e)}`;

@@ -1,7 +1,7 @@
 // Состояние загрузки партий и очереди разбора; на него подписываются экраны.
 import { useEffect, useSyncExternalStore } from 'react';
 import { createAnalysisQueue, type AnalysisQueue, type QueueStatus } from '../analysis/queue';
-import { ChessComError } from '../chesscom/api';
+import { ChessComError, NO_ANSWER } from '../chesscom/api';
 import { syncGames } from '../chesscom/sync';
 import { getChessUser } from '../data/gamesRepo';
 import { analysisEngine } from '../engine/analysisEngine';
@@ -52,6 +52,7 @@ function failure(e: unknown): Partial<GamesState> {
   if (e instanceof ChessComError) {
     if (e.kind === 'offline') return { sync: 'offline', syncError: 'Нет сети, список не обновлён' };
     if (e.kind === 'notFound') return { sync: 'error', syncError: 'Игрок не найден' };
+    if (e.kind === 'noAnswer') return { sync: 'error', syncError: NO_ANSWER };
     // Причина уже может начинаться с «Chess.com ответил» — приставку не повторяем.
     const reason = e.message.replace(/^Chess\.com ответил кодом /, 'код ');
     return { sync: 'error', syncError: `Chess.com ответил ошибкой: ${reason}` };

@@ -174,7 +174,8 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
     const n = (failures.get(game.id) ?? 0) + 1;
     failures.set(game.id, n);
     settleOpening(game.id, null);
-    update({ running: null, ...(n >= 2 ? { lastError: ENGINE_FAILED } : {}) });
+    // Текст ставится при каждой неудаче: экран читает его сразу после ответа open.
+    update({ running: null, lastError: ENGINE_FAILED });
   }
 
   async function loop() {

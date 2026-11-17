@@ -88,11 +88,12 @@ describe('запросы', () => {
     expect(await fetchArchives('owner_test', reply(200, list))).toEqual(['2026/09', '2026/10']);
   });
 
-  it('fetch бросает не TypeError (DOMException) — ChessComError вида bad', async () => {
+  it('fetch бросает не TypeError (DOMException), сеть есть — Chess.com не ответил', async () => {
     const failing = (async () => { throw new DOMException('Отказано', 'SecurityError'); }) as typeof fetch;
     const err = await fetchPlayer('owner_test', failing).catch(x => x);
     expect(err).toBeInstanceOf(ChessComError);
-    expect(err.kind).toBe('bad');
+    expect(err.kind).toBe('noAnswer');
+    expect(err.message).toBe('Не удалось связаться с Chess.com. Попробуй ещё раз.');
   });
 
   it('fetch бросает, а сеть за время запроса пропала — offline', async () => {

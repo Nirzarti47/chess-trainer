@@ -522,6 +522,7 @@ describe('Профиль: ник', () => {
   it.each([
     ['notFound', 'Игрок не найден'],
     ['offline', 'Нет сети. Проверь интернет и попробуй ещё раз'],
+    ['noAnswer', 'Не удалось связаться с Chess.com. Попробуй ещё раз.'],
   ] as const)('смена ника, проверка нового не прошла (%s): change не вызван, лист открыт, виден текст', async (kind, text) => {
     await setChessUser({ nick: 'owner_test', loadedThrough: null });
     fetchPlayer.mockRejectedValueOnce(new ChessComError(kind, 'сбой'));

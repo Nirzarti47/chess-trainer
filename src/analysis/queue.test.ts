@@ -258,6 +258,14 @@ describe('очередь разбора', () => {
     expect(calls).toBe(14);
   });
 
+  it('первая же неудача партии ставит текст ошибки: open получает null, текст уже на месте', async () => {
+    await putGames([game('b', 100, 'blitz')]);
+    const engine: Pick<AnalysisEngine, 'analyse'> = { analyse: async () => null };
+    const { queue } = makeQueue(engine);
+    expect(await queue.open('b')).toBeNull();
+    expect(queue.status().lastError).toBe(ENGINE_FAILED);
+  });
+
   it('партию дважды подряд прерывает потеря видимости: сбоем это не считается', async () => {
     await putGames([game('a', 100)]);
     let hide = () => {};

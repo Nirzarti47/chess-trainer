@@ -8,9 +8,14 @@ const DRAW_RESULTS: readonly string[] = ['agreed', 'repetition', 'stalemate', 'i
 // Партия с заданной позицией; chess.js может сбросить заголовок, поэтому ищем в тексте
 const SETUP_RE = /\[SetUp\s+"1"\]/;
 
+/** noAnswer — запрос сорвался при включённой сети: ответа от Chess.com не было. */
+type ErrorKind = 'notFound' | 'offline' | 'noAnswer' | 'bad';
+
+export const NO_ANSWER = 'Не удалось связаться с Chess.com. Попробуй ещё раз.';
+
 export class ChessComError extends Error {
-  kind: 'notFound' | 'offline' | 'bad';
-  constructor(kind: 'notFound' | 'offline' | 'bad', message: string) {
+  kind: ErrorKind;
+  constructor(kind: ErrorKind, message: string) {
     super(message);
     this.name = 'ChessComError';
     this.kind = kind;
@@ -27,9 +32,9 @@ async function get(url: string, fetchFn: typeof fetch): Promise<Response> {
   try {
     res = await fetchFn(url);
   } catch (e) {
-    // TypeError — обрыв сети; любой другой сбой запроса тоже становится ChessComError.
+    // TypeError — обрыв сети; другой сбой запроса при включённой сети — Chess.com не ответил.
     if (e instanceof TypeError || offline()) throw new ChessComError('offline', 'Нет сети');
-    throw new ChessComError('bad', `сбой запроса (${e instanceof Error ? `${e.name}: ${e.message}` : String(e)})`);
+    throw new ChessComError('noAnswer', NO_ANSWER);
   }
   if (res.status === 404) throw new ChessComError('notFound', 'Игрок не найден');
   if (res.status !== 200) throw new ChessComError('bad', `Chess.com ответил кодом ${res.status}`);

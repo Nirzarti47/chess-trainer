@@ -37,6 +37,14 @@ describe('syncNow', () => {
     expect(result.current.syncError).toBe('Нет сети, список не обновлён');
   });
 
+  it('Chess.com не ответил → error без «ответил ошибкой»', async () => {
+    sync.mockRejectedValue(new ChessComError('noAnswer', 'текст из ошибки не нужен'));
+    const { result } = renderHook(() => useGamesState());
+    await act(() => syncNow());
+    expect(result.current.sync).toBe('error');
+    expect(result.current.syncError).toBe('Не удалось связаться с Chess.com. Попробуй ещё раз.');
+  });
+
   it('плохой ответ → error с причиной', async () => {
     sync.mockRejectedValue(new ChessComError('bad', 'Chess.com ответил кодом 500'));
     const { result } = renderHook(() => useGamesState());
