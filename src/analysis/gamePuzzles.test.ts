@@ -15,6 +15,10 @@ const game: GameRecord = {
 
 const alt = (move: string, score: Score): AltMove => ({ move, score, pv: [move] });
 const GOOD_LINES = [alt('b1c3', { cp: 300 }), alt('b1a3', { cp: -50 })];
+/** Единственный хороший ход move — у каждой задачи свой верный ход. */
+const only = (move: string): AltMove[] => [alt(move, { cp: 300 }), alt('b1a3', { cp: -50 })];
+/** Тихие ходы белых, разные для разных задач. */
+const PAWN_MOVES = ['a2a3', 'a2a4', 'b2b3', 'b2b4', 'c2c3', 'c2c4', 'd2d3', 'd2d4', 'e2e3', 'e2e4', 'h2h3', 'h2h4'];
 
 const quiet = (ply: number): MoveReview => ({
   ply, move: MOVES[ply], loss: 0, grade: 'best', best: [alt(MOVES[ply], { cp: 0 })], deep: false,
@@ -72,7 +76,7 @@ describe('selectPuzzles', () => {
       8: blunder(8, { best: [alt('b1c3', { cp: 300 }), alt('b1a3', { cp: 250 })] }),
       10: blunder(10, { best: [alt('b1c3', { mate: 2 }), alt('b1a3', { mate: 3 })] }),
       12: blunder(12, { best: [alt('b1c3', { cp: -400 }), alt('b1a3', { cp: -900 })] }),
-      14: blunder(14, { grade: 'mistake', loss: 0.15 }),
+      14: blunder(14, { grade: 'mistake', loss: 0.15, best: only('a2a4') }),
       16: blunder(16, { grade: 'inaccuracy', loss: 0.09 }),
     });
     expect(selectPuzzles(game, a).map((p) => p.ply)).toEqual([2, 14]);
@@ -80,8 +84,26 @@ describe('selectPuzzles', () => {
 
   it('из 12 подходящих — 8 с наибольшей потерей', () => {
     const over: Record<number, MoveReview> = {};
-    for (let k = 1; k <= 12; k++) over[2 * k] = blunder(2 * k, { loss: 0.2 + k / 100 });
+    for (let k = 1; k <= 12; k++) over[2 * k] = blunder(2 * k, { loss: 0.2 + k / 100, best: only(PAWN_MOVES[k - 1]) });
     expect(selectPuzzles(game, analysis(over)).map((p) => p.ply)).toEqual([24, 22, 20, 18, 16, 14, 12, 10]);
+  });
+
+  it('тот же верный ход — одна задача: остаётся та, что раньше по порядку отбора', () => {
+    const a = analysis({
+      2: blunder(2, { loss: 0.3 }),
+      4: blunder(4, { loss: 0.5 }),
+      6: blunder(6, { loss: 0.4, best: only('a2a4') }),
+      8: blunder(8, { loss: 0.35 }),
+    });
+    expect(selectPuzzles(game, a).map((p) => p.ply)).toEqual([4, 6]);
+  });
+
+  it('повторы убираются до предела в 8 задач', () => {
+    const over: Record<number, MoveReview> = {};
+    // девять ошибок, у двух самых тяжёлых верный ход один
+    for (let k = 1; k <= 9; k++) over[2 * k] = blunder(2 * k, { loss: 0.2 + k / 100, best: only(PAWN_MOVES[k - 1]) });
+    over[16] = blunder(16, { loss: 0.28, best: only(PAWN_MOVES[8]) });
+    expect(selectPuzzles(game, analysis(over)).map((p) => p.ply)).toEqual([18, 14, 12, 10, 8, 6, 4, 2]);
   });
 });
 
@@ -93,7 +115,7 @@ describe('reconcile', () => {
 
   it('оставляет, заменяет и добавляет', () => {
     const a = analysis({ 2: blunder(2), 4: blunder(4, { best: [alt('b1a3', { cp: 300 }), alt('b1c3', { cp: -50 })] }),
-      6: blunder(6) });
+      6: blunder(6, { best: only('a2a4') }) });
     const fresh = selectPuzzles(game, a);
     const old = [stored(2, 'b1c3'), stored(4, 'b1c3')];
     const r = reconcile(old, fresh, a);

@@ -16,21 +16,45 @@ describe('gradeOf', () => {
 const line = (cp: number): AltMove => ({ move: 'e2e4', score: { cp }, pv: ['e2e4'] });
 
 describe('isGreat', () => {
+  // тихий ход из начальной позиции
+  const quiet = { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', move: 'e2e4' };
+  const blackQuiet = { fenBefore: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1', move: 'e7e5' };
+  const gap = { grade: 'best' as const, best: [line(200), line(-100)], mover: 'white' as const, isRecapture: false };
+
   it('единственный хороший ход', () => {
-    expect(isGreat({ grade: 'best', best: [line(200), line(-100)], mover: 'white', isRecapture: false })).toBe(true);
+    expect(isGreat({ ...gap, ...quiet })).toBe(true);
   });
   it('второй ход почти так же хорош', () => {
-    expect(isGreat({ grade: 'best', best: [line(200), line(170)], mover: 'white', isRecapture: false })).toBe(false);
+    expect(isGreat({ ...gap, ...quiet, best: [line(200), line(170)] })).toBe(false);
   });
   it('ответное взятие не отмечается', () => {
-    expect(isGreat({ grade: 'best', best: [line(200), line(-100)], mover: 'white', isRecapture: true })).toBe(false);
+    expect(isGreat({ ...gap, ...quiet, isRecapture: true })).toBe(false);
   });
   it('одна линия — не судим', () => {
-    expect(isGreat({ grade: 'best', best: [line(200)], mover: 'white', isRecapture: false })).toBe(false);
+    expect(isGreat({ ...gap, ...quiet, best: [line(200)] })).toBe(false);
   });
   it('для чёрных разрыв считается с их стороны', () => {
-    expect(isGreat({ grade: 'best', best: [line(-200), line(100)], mover: 'black', isRecapture: false })).toBe(true);
-    expect(isGreat({ grade: 'good', best: [line(-200), line(100)], mover: 'black', isRecapture: false })).toBe(false);
+    const black = { ...blackQuiet, best: [line(-200), line(100)], mover: 'black' as const, isRecapture: false };
+    expect(isGreat({ ...black, grade: 'best' })).toBe(true);
+    expect(isGreat({ ...black, grade: 'good' })).toBe(false);
+  });
+
+  describe('очевидные ходы «!» не получают', () => {
+    it('взятие', () => {
+      // ладья берёт незащищённую ладью
+      expect(isGreat({ ...gap, fenBefore: '4k3/8/8/3r4/8/8/3R4/4K3 w - - 0 1', move: 'd2d5' })).toBe(false);
+    });
+    it('мат', () => {
+      expect(isGreat({ ...gap, fenBefore: '6k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1', move: 'd1d8' })).toBe(false);
+    });
+    it('уход фигуры, на которую нападала более дешёвая фигура', () => {
+      // пешка e5 нападает на коня d4
+      expect(isGreat({ ...gap, fenBefore: '4k3/8/8/4p3/3N4/8/8/4K3 w - - 0 1', move: 'd4f3' })).toBe(false);
+    });
+    it('уход фигуры, на которую нападала более дорогая фигура, — «!» остаётся', () => {
+      // ладья c8 нападает на слона c4, слон уходит
+      expect(isGreat({ ...gap, fenBefore: '2r1k3/8/8/8/2B5/8/8/4K3 w - - 0 1', move: 'c4b3' })).toBe(true);
+    });
   });
 });
 

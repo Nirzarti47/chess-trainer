@@ -34,7 +34,8 @@ const side = (mistake: number, blunder: number): SideSummary => ({
   brilliant: 0, great: 0, accuracy: 70, kinds: {},
 });
 
-const analysis = (gameId: string, white: SideSummary, black: SideSummary, rulesVersion = CONFIG.RULES_VERSION): GameAnalysis =>
+const analysis = (gameId: string, white: SideSummary, black: SideSummary,
+  rulesVersion: number = CONFIG.RULES_VERSION): GameAnalysis =>
   ({ gameId, rulesVersion, analysedAt: 1, tookMs: 1, scores: [{ cp: 0 }], moves: [], white, black });
 
 function Where() {
@@ -125,7 +126,7 @@ describe('GamesScreen: список', () => {
     ]);
     await saveAnalysis(analysis('mid', side(9, 9), side(3, 1)), { put: [], removeIds: [] });
     await saveAnalysis(analysis('new', side(0, 0), side(2, 2)), { put: [], removeIds: [] });
-    await saveAnalysis(analysis('old', side(7, 7), side(7, 7), 2 as never), { put: [], removeIds: [] });
+    await saveAnalysis(analysis('old', side(7, 7), side(7, 7), CONFIG.RULES_VERSION - 1), { put: [], removeIds: [] });
   });
 
   it('три партии от новой к старой; число ошибок стороны владельца, старая версия разбора не считается', async () => {

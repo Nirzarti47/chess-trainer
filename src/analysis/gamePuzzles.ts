@@ -16,9 +16,11 @@ function fenAt(moves: string[], ply: number): string {
   return chess.fen();
 }
 
-/** Ошибки владельца с единственным хорошим ответом — по убыванию потери, не больше PUZZLE_MAX. */
+/** Ошибки владельца с единственным хорошим ответом — по убыванию потери, не больше PUZZLE_MAX.
+ *  Верный ход, который уже есть в отобранной задаче, второй задачи не даёт. */
 export function selectPuzzles(game: GameRecord, a: GameAnalysis): GamePuzzle[] {
   const owner: Side = game.userColor;
+  const answers = new Set<string>();
   return a.moves
     .filter((m) => {
       if ((m.ply % 2 === 0) !== (owner === 'white')) return false;
@@ -28,6 +30,11 @@ export function selectPuzzles(game: GameRecord, a: GameAnalysis): GamePuzzle[] {
       return top - expected(m.best[1].score, owner) >= CONFIG.UNIQUE_MARGIN && top >= CONFIG.PUZZLE_MIN_BEST;
     })
     .sort((x, y) => y.loss - x.loss)
+    .filter((m) => {
+      if (answers.has(m.best[0].move)) return false;
+      answers.add(m.best[0].move);
+      return true;
+    })
     .slice(0, CONFIG.PUZZLE_MAX)
     .map((m) => ({
       id: gamePuzzleId(game.id, m.ply), gameId: game.id, ply: m.ply, endTime: game.endTime,

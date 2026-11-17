@@ -19,6 +19,7 @@ export const KIND_TITLE: Record<MistakeKind, string> = {
   missedCapture: 'Пропущен захват',
   missedFork: 'Пропущена вилка',
   badTrade: 'Невыгодный размен',
+  missedCheck: 'Пропущен сильный шах',
   other: 'Другое',
 };
 
@@ -31,6 +32,8 @@ export const KIND_ADVICE: Record<MistakeKind, string> = {
   missedCapture: 'Перед ходом посмотри, что можно забрать у соперника.',
   missedFork: 'Ищи ход, который нападает сразу на две фигуры.',
   badTrade: 'Перед разменом посчитай, что отдаёшь и что забираешь.',
+  missedCheck: 'Перед ходом проверь все шахи — свои и соперника. '
+    + 'Шах часто выигрывает фигуру, которая стоит за королём или без защиты.',
   other: 'Перед ходом сравни два-три разных хода.',
 };
 
@@ -43,5 +46,6 @@ export const THEMES_OF_KIND: Record<MistakeKind, ThemeId[]> = {
   missedCapture: ['hangingPiece'],
   missedFork: ['fork'],
   badTrade: [],
+  missedCheck: ['skewer', 'doubleCheck'],
   other: [],
 };

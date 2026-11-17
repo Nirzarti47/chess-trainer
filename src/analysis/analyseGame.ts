@@ -127,7 +127,7 @@ export async function analyseGame(game: GameRecord, deps: AnalyseDeps): Promise<
     const isRecapture = !!played[i].captured && !!prev?.captured && prev.to === played[i].to;
     if (isBrilliant({ loss: m.loss, fenBefore: positions[i].fen, move: m.move, before, after, mover })) {
       m.mark = 'brilliant';
-    } else if (isGreat({ grade: m.grade, best, mover, isRecapture })) {
+    } else if (isGreat({ grade: m.grade, best, mover, isRecapture, fenBefore: positions[i].fen, move: m.move })) {
       m.mark = 'great';
     }
   }

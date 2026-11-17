@@ -88,6 +88,14 @@ describe('countKinds', () => {
     ]);
     expect(counts.map((c) => c.kind)).toEqual(['allowedMate', 'missedFork', 'other']);
   });
+
+  it('«пропущен сильный шах» считается и при равенстве идёт перед other, после badTrade', () => {
+    const counts = countKinds([game('a', NOW)], [
+      analysis('a', [move(0, 'mistake', 'other'), move(2, 'mistake', 'missedCheck'), move(4, 'blunder', 'badTrade')]),
+    ]);
+    expect(counts.map((c) => c.kind)).toEqual(['badTrade', 'missedCheck', 'other']);
+    expect(trainKinds(counts)).toEqual(['badTrade', 'missedCheck']);
+  });
 });
 
 describe('tooFew', () => {

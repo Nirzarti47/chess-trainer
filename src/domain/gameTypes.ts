@@ -14,7 +14,7 @@ export type Score = { cp: number } | { mate: number } | { over: Side | 'draw' };
 export type Grade = 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder';
 export type Mark = 'brilliant' | 'great';
 export type MistakeKind = 'missedMate' | 'allowedMate' | 'pieceEnPrise' | 'pieceUndefended'
-  | 'missedCapture' | 'missedFork' | 'badTrade' | 'other';
+  | 'missedCapture' | 'missedFork' | 'badTrade' | 'missedCheck' | 'other';
 
 export interface AltMove { move: string; score: Score; pv: string[] }
 

@@ -1,7 +1,7 @@
-import { Chess } from 'chess.js';
+import { Chess, type Square } from 'chess.js';
 import type { AltMove, Grade, MoveReview, Score, Side, SideSummary } from '../domain/gameTypes';
 import { CONFIG } from './config';
-import { PIECE_VALUE, see } from './material';
+import { PIECE_VALUE, playUci, see } from './material';
 import { expected, moveAccuracy } from './score';
 
 export function gradeOf(loss: number, playedIsBest: boolean): Grade {
@@ -13,10 +13,24 @@ export function gradeOf(loss: number, playedIsBest: boolean): Grade {
 }
 
 /** «Сильный ход»: лучший, а второй по силе заметно хуже. best — линии из позиции перед ходом
- *  (белая точка зрения), сильнейшая первой. Ответное взятие не отмечается. */
-export function isGreat(a: { grade: Grade; best: AltMove[]; mover: Side; isRecapture: boolean }): boolean {
+ *  (белая точка зрения), сильнейшая первой. Ответное взятие не отмечается. Очевидные ходы тоже:
+ *  взятие, мат и уход фигуры, на которую нападала более дешёвая фигура соперника. */
+export function isGreat(a: { grade: Grade; best: AltMove[]; mover: Side; isRecapture: boolean; fenBefore: string;
+  move: string }): boolean {
   if (a.grade !== 'best' || a.isRecapture || a.best.length < 2) return false;
-  return expected(a.best[0].score, a.mover) - expected(a.best[1].score, a.mover) >= CONFIG.GREAT_GAP;
+  if (expected(a.best[0].score, a.mover) - expected(a.best[1].score, a.mover) < CONFIG.GREAT_GAP) return false;
+
+  const chess = new Chess(a.fenBefore);
+  const foe = chess.turn() === 'w' ? 'b' : 'w';
+  const from = a.move.slice(0, 2) as Square;
+  const own = chess.get(from);
+  // король не в счёт: его «цена» 0, но нападение короля фигуру не гонит
+  const chased = !!own && chess.attackers(from, foe).some((sq) => {
+    const t = chess.get(sq)!.type;
+    return t !== 'k' && PIECE_VALUE[t] < PIECE_VALUE[own.type];
+  });
+  const m = playUci(chess, a.move);
+  return !!m && !m.captured && !chess.isCheckmate() && !chased;
 }
 
 /** «Блестящий ход»: почти лучший, отдаёт фигуру под бой, позиция после хода не хуже равной,

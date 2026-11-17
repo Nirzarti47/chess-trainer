@@ -2,6 +2,7 @@ import { Chess, type Move, type PieceSymbol } from 'chess.js';
 import type { AltMove, MistakeKind, Score, Side } from '../domain/gameTypes';
 import { CONFIG } from './config';
 import { PIECE_VALUE, playUci, see, swing } from './material';
+import { ruSan } from './notation';
 import { OTHER_PHRASE } from './phrases';
 
 type Result = { kind: MistakeKind; phrase: string };
@@ -31,14 +32,14 @@ function mateFor(score: Score | undefined, side: Side): number | null {
 }
 
 /** Что отдано и что взято в первых трёх полуходах линии, начатой сыгравшим. */
-function tradeWords(fen: string, line: string[]): { given: string[]; taken: string[] } {
+function trade(fen: string, line: string[]): { given: PieceSymbol[]; taken: PieceSymbol[] } {
   const chess = new Chess(fen);
-  const given: string[] = [];
-  const taken: string[] = [];
+  const given: PieceSymbol[] = [];
+  const taken: PieceSymbol[] = [];
   for (let i = 0; i < Math.min(3, line.length); i++) {
     const m = playUci(chess, line[i]);
     if (!m) break;
-    if (m.captured) (i % 2 === 0 ? taken : given).push(i % 2 === 0 ? PIECE[m.captured].acc : PIECE[m.captured].nom);
+    if (m.captured) (i % 2 === 0 ? taken : given).push(m.captured);
   }
   return { given, taken };
 }
@@ -93,27 +94,35 @@ export function classifyMistake(a: { fenBefore: string; played: string; best: Al
   const chess = new Chess(a.fenBefore);
   const played = playUci(chess, a.played);
   if (played && reply.length > 0) {
-    // 3. Невыгодный размен
-    if (played.captured && swing(a.fenBefore, [a.played, ...reply], 3) <= -CONFIG.MATERIAL_WIN) {
-      const { given, taken } = tradeWords(a.fenBefore, [a.played, ...reply]);
+    const fenAfter = chess.fen();
+    const r = playUci(chess, reply[0]);
+    // соперник отвечает на поле сыгранного хода (там фигура сыгравшего, так что это взятие)
+    const sameSquare = r?.to === played.to;
+    // 3. Невыгодный размен: сыгранный ход — взятие, соперник отбивает на том же поле
+    if (played.captured && sameSquare && swing(a.fenBefore, [a.played, ...reply], 3) <= -CONFIG.MATERIAL_WIN) {
+      const { given, taken } = trade(a.fenBefore, [a.played, ...reply]);
       if (given.length > 0 && taken.length > 0) {
-        return { kind: 'badTrade', phrase: `Размен в пользу соперника: ${given.join(' и ')} за ${taken.join(' и ')}` };
+        const gave = given.map((p) => PIECE[p].nom).join(' и ');
+        const got = taken.map((p) => PIECE[p].acc).join(' и ');
+        return { kind: 'badTrade', phrase: `Размен в пользу соперника: ${gave} за ${got}` };
       }
     }
     // 4–5. Соперник забирает фигуру (не пешку) с выигрышем материала
-    const fenAfter = chess.fen();
-    // что сам сыгранный ход забрал: вычитается из выигрыша соперника (равный размен не ошибка)
-    const gained = played.captured ? PIECE_VALUE[played.captured] : 0;
-    const r = playUci(chess, reply[0]);
+    // взятое сыгранным ходом вычитается только при размене на том же поле (равный размен не ошибка)
+    const gained = played.captured && sameSquare ? PIECE_VALUE[played.captured] : 0;
     if (r?.captured && !r.flags.includes('e') && PIECE_VALUE[r.captured] >= CONFIG.MATERIAL_WIN
       && swing(fenAfter, reply, 3) - gained >= CONFIG.MATERIAL_WIN) {
-      if (r.to === played.to) {
+      if (sameSquare) {
         const p = played.promotion ?? played.piece;
         return { kind: 'pieceEnPrise', phrase: `${cap(PIECE[p].nom)} поставлен${ending(p, 'а', '')} под бой: `
           + `${ending(p, 'её', 'его')} заберёт ${PIECE[r.piece].nom} ${r.from}` };
       }
-      return { kind: 'pieceUndefended', phrase: `${cap(PIECE[r.captured].nom)} на ${r.to} `
-        + `остал${ending(r.captured, 'ась', 'ся')} без защиты` };
+      const left = `${cap(PIECE[r.captured].nom)} на ${r.to} остал${ending(r.captured, 'ась', 'ся')}`;
+      // защищённую фигуру забирают с выгодой: она осталась под боем, а не без защиты
+      const defended = new Chess(fenAfter).isAttacked(r.to, played.color);
+      return { kind: 'pieceUndefended', phrase: defended
+        ? `${left} под боем: ${ending(r.captured, 'её', 'его')} заберёт ${PIECE[r.piece].nom} ${r.from}`
+        : `${left} без защиты` };
     }
   }
 
@@ -121,14 +130,26 @@ export function classifyMistake(a: { fenBefore: string; played: string; best: Al
     const board = new Chess(a.fenBefore);
     const m = playUci(board, top.move);
     const wins = swing(a.fenBefore, top.pv, 3) >= CONFIG.MATERIAL_WIN;
-    // 6. Пропущен захват: первым ходом лучшей линии берётся фигура, а не пешка
-    if (m?.captured && PIECE_VALUE[m.captured] >= CONFIG.MATERIAL_WIN && wins) {
+    // 6. Пропущен захват: первым ходом лучшей линии берётся фигура, а не пешка;
+    // сыгранный ход, забравший на том же поле, захват не пропустил
+    const tookSame = played?.captured !== undefined && played.to === m?.to;
+    if (m?.captured && !tookSame && PIECE_VALUE[m.captured] >= CONFIG.MATERIAL_WIN && wins) {
       const free = see(a.fenBefore, top.move) === PIECE_VALUE[m.captured];
       return { kind: 'missedCapture', phrase: `Можно было забрать ${PIECE[m.captured].acc}${free ? ' бесплатно' : ''}` };
     }
     // 7. Пропущена вилка
     const fork = m && wins ? forkPhrase(board, m) : null;
     if (fork) return { kind: 'missedFork', phrase: fork };
+    // 8. Пропущен сильный шах (мат ловит правило 1)
+    if (m && board.isCheck() && !board.isCheckmate()) {
+      // самая дорогая фигура, которую забирает сыгравший в трёх полуходах линии
+      const prize = wins
+        ? trade(a.fenBefore, top.pv).taken.sort((x, y) => PIECE_VALUE[y] - PIECE_VALUE[x])[0]
+        : undefined;
+      return { kind: 'missedCheck', phrase: prize
+        ? `Шах ${ruSan(m.san)} выигрывал ${PIECE[prize].acc}`
+        : `Шах ${ruSan(m.san)} давал сильную атаку` };
+    }
   }
 
   return { kind: 'other', phrase: OTHER_PHRASE };

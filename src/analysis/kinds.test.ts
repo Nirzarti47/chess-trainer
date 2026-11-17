@@ -10,13 +10,18 @@ describe('phrases', () => {
     expect(THEMES_OF_KIND).toEqual({
       missedMate: ['mateIn1', 'mateIn2'], allowedMate: ['mateIn1', 'mateIn2'],
       pieceEnPrise: ['hangingPiece'], pieceUndefended: ['hangingPiece'], missedCapture: ['hangingPiece'],
-      missedFork: ['fork'], badTrade: [], other: [],
+      missedFork: ['fork'], badTrade: [], missedCheck: ['skewer', 'doubleCheck'], other: [],
     });
     const ids = THEMES.map((t) => t.id);
     for (const list of Object.values(THEMES_OF_KIND)) for (const id of list) expect(ids).toContain(id);
   });
   it('у каждого вида есть название и совет', () => {
     expect(KIND_TITLE.pieceEnPrise).toBe('Фигура под боем');
+    expect(KIND_TITLE.missedCheck).toBe('Пропущен сильный шах');
+    expect(KIND_ADVICE.missedCheck).toBe('Перед ходом проверь все шахи — свои и соперника. '
+      + 'Шах часто выигрывает фигуру, которая стоит за королём или без защиты.');
+    // порядок объявления задаёт порядок при равном счёте: новый вид — перед «другим»
+    expect(Object.keys(KIND_TITLE).slice(-2)).toEqual(['missedCheck', 'other']);
     for (const kind of Object.keys(THEMES_OF_KIND) as (keyof typeof KIND_TITLE)[]) {
       expect(KIND_TITLE[kind]).not.toBe('');
       expect(KIND_ADVICE[kind]).toMatch(/\.$/);
@@ -189,6 +194,68 @@ describe('classifyMistake', () => {
       expect(chess.history({ verbose: true }).map((m) => m.captured)).toEqual(['p', undefined, 'r']);
       const r = run(fen, 'e1e2', alt('b4c6', { cp: 500 }, line), null, { cp: 0 });
       expect(r.kind).not.toBe('missedCapture');
+    });
+  });
+
+  describe('поправки подгонки', () => {
+    // 15… c5 16. e:f6 — конь f6 защищён пешкой g7, ферзь d7 стоит против ферзя d1
+    const DEFENDED_FEN = 'r4rk1/p1pq1pp1/bp3n1p/n3P3/P1P5/B4P1N/6PP/R2QKB1R b KQ - 0 15';
+    // 16… g:f6 17. Ф:d7 — пешка бьёт пешку, а соперник забирает незащищённого ферзя
+    const OTHER_SQUARE_FEN = 'r4rk1/p2q1pp1/bp3P1p/n1p5/P1P5/B4P1N/6PP/R2QKB1R b KQ - 0 16';
+    // 8… g:f6 9. Ф:d4 — пешка забирает слона, конь d4 остаётся без защиты
+    const TAKEN_FEN = 'r1bqkb1r/ppp2pp1/3p1B1p/8/3nP3/2N4P/PPP2PP1/R2QKB1R b KQkq - 0 8';
+    // Лd8+ Крe7 Л:h8
+    const CHECK_ROOK_FEN = 'r1b2k1r/2p2ppp/p7/4N3/n2R4/5P2/P1P2KPP/R7 w - - 0 23';
+    // Фh5+ с решающей атакой
+    const CHECK_ATTACK_FEN = 'r1bqkbnr/pppp3p/2n5/5p2/8/2N5/PPP2PPP/R1BQKBNR w KQkq - 0 7';
+
+    it('К1: взятие, а соперник бьёт другую фигуру — не «невыгодный размен»', () => {
+      const r = run(OTHER_SQUARE_FEN, 'g7f6', alt('d7d1', { cp: 0 }), alt('d1d7', { cp: 900 }), { cp: 900 },
+        'black');
+      expect(r).toEqual({ kind: 'pieceUndefended', phrase: 'Ферзь на d7 остался без защиты' });
+    });
+
+    it('К2: забранная фигура защищена — «остался под боем», с тем, кто забирает', () => {
+      const r = run(DEFENDED_FEN, 'c7c5', alt('f6d5', { cp: 0 }), alt('e5f6', { cp: 300 }, ['e5f6', 'd7d1', 'a1d1']),
+        { cp: 300 }, 'black');
+      expect(r).toEqual({ kind: 'pieceUndefended', phrase: 'Конь на f6 остался под боем: его заберёт пешка e5' });
+    });
+
+    it('К2: женский род; незащищённая фигура — прежняя фраза', () => {
+      // слон a7 забирает ладью d4, пешка e3 отбивает: 5 − 3
+      const r = run('4k3/b7/8/8/3R4/4P3/8/4K3 w - - 0 1', 'e1e2', alt('d4d1', { cp: 0 }),
+        alt('a7d4', { cp: -200 }, ['a7d4', 'e3d4']), { cp: -200 });
+      expect(r).toEqual({ kind: 'pieceUndefended', phrase: 'Ладья на d4 осталась под боем: её заберёт слон a7' });
+      const r2 = run('4k3/b7/8/8/3R4/8/8/4K3 w - - 0 1', 'e1e2', alt('d4d1', { cp: 0 }), alt('a7d4', { cp: -500 }),
+        { cp: -500 });
+      expect(r2).toEqual({ kind: 'pieceUndefended', phrase: 'Ладья на d4 осталась без защиты' });
+    });
+
+    it('К3: взятое сыгранным ходом не вычитается, если соперник бьёт на другом поле', () => {
+      const r = run(TAKEN_FEN, 'g7f6', alt('d8f6', { cp: 0 }), alt('d1d4', { cp: 300 }), { cp: 300 }, 'black');
+      expect(r).toEqual({ kind: 'pieceUndefended', phrase: 'Конь на d4 остался без защиты' });
+    });
+
+    it('К4: сыгранный ход забрал на том же поле, что и лучший, — не «пропущен захват»', () => {
+      const r = run(TAKEN_FEN, 'g7f6', alt('d8f6', { cp: 0 }), null, { cp: 300 }, 'black');
+      expect(r).toEqual({ kind: 'other', phrase: 'Лучше было сыграть так' });
+    });
+
+    it('К5: пропущен шах, который выигрывал ладью', () => {
+      const r = run(CHECK_ROOK_FEN, 'a1b1', alt('d4d8', { cp: 600 }, ['d4d8', 'f8e7', 'd8h8']), null, { cp: 0 });
+      expect(r).toEqual({ kind: 'missedCheck', phrase: 'Шах Лd8+ выигрывал ладью' });
+    });
+
+    it('К5: пропущен шах с сильной атакой', () => {
+      const r = run(CHECK_ATTACK_FEN, 'g1f3', alt('d1h5', { cp: 1000 }, ['d1h5', 'e8e7', 'c3d5']), null, { cp: 0 });
+      expect(r).toEqual({ kind: 'missedCheck', phrase: 'Шах Фh5+ давал сильную атаку' });
+    });
+
+    it('К5: шах, совпавший с сыгранным ходом, и мат — не «пропущен шах»', () => {
+      expect(run(CHECK_ROOK_FEN, 'd4d8', alt('d4d8', { cp: 600 }, ['d4d8', 'f8e7', 'd8h8']), null, { cp: 600 })
+        .kind).toBe('other');
+      // мат и после сыгранного: правило 1 молчит, а мат шахом не считается
+      expect(run(MATE_FEN, 'h2h3', alt('d1d8', { mate: 1 }), null, { mate: 3 }).kind).toBe('other');
     });
   });
 });

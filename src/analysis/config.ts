@@ -1,6 +1,6 @@
 /** Все пороги разбора партий. Менять числа — только здесь. */
 export const CONFIG = {
-  RULES_VERSION: 1,
+  RULES_VERSION: 2,
   FAST_NODES: 60_000, FAST_MULTIPV: 2,
   DEEP_NODES: 300_000, DEEP_MULTIPV: 3, DEEP_TRIGGER_LOSS: 0.08, DEEP_MAX_MOVES: 20,
   EXPLORE_NODES: 300_000,
