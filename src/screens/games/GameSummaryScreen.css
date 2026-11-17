@@ -110,13 +110,14 @@
   bottom: 0;
   z-index: 5;
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   margin: auto -16px 0;
   padding: 18px 14px calc(16px + env(safe-area-inset-bottom));
   background: linear-gradient(to bottom, transparent, var(--bg) 14px);
 }
 
-.summary-actions .big-button { flex: 1; }
+.summary-actions .big-button { flex: none; }
 
 /* Полоса разбора не растёт на весь экран: у общего .progress-bar стоит flex: 1 */
 .summary .progress-bar { flex: none; }
