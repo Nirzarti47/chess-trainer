@@ -84,6 +84,9 @@ export function ReviewScreen({ engine = analysisEngine }: { engine?: Engine }) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const ply = useSearchParams()[0].get('ply');
+  /** Номер хода (?ply=) уходит со сводкой, если разбор устарел. */
+  const plyQuery = ply === null ? '' : `?ply=${encodeURIComponent(ply)}`;
 
   useEffect(() => {
     let alive = true;
@@ -98,14 +101,14 @@ export function ReviewScreen({ engine = analysisEngine }: { engine?: Engine }) {
       const analysis = await getCurrentAnalysis(gameId);
       if (!alive) return;
       // Разбора нет или он устарел: сводка сама запустит разбор.
-      if (!analysis) navigate('/games/' + gameId, { replace: true });
+      if (!analysis) navigate(`/games/${gameId}${plyQuery}`, { replace: true });
       else setPhase({ kind: 'ready', game, analysis });
     })().catch((e: unknown) => {
       console.error('Не удалось открыть разбор', e);
       if (alive) setPhase({ kind: 'dbError', text: describeError(e) });
     });
     return () => { alive = false; };
-  }, [gameId, attempt, navigate]);
+  }, [gameId, attempt, navigate, plyQuery]);
 
   if (phase.kind === 'loading') return <section className="review" aria-busy="true" />;
 

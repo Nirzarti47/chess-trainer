@@ -599,6 +599,16 @@ describe('RepeatLessonScreen', () => {
     expect(await screen.findByText('В этой партии нет задач на исправление')).toBeTruthy();
   });
 
+  it('М2: незаконченные «Частые ошибки», задачи из партии в базе уже нет: сохранённый урок отброшен', async () => {
+    // Сменили ник: задачи партий стёрты, а урок «Частые ошибки» остался недопройденным.
+    await db.kv.put({ key: 'activeLesson', value: {
+      nodeId: 'pattern', lessonIndex: 0, tasks: [gamePz(5), gamePz(9, P2_MOVES)], cursor: 1, results: ['clean'],
+      retry: [], title: 'Частые ошибки', source: 'pattern' } });
+    renderRepeat('pattern');
+    expect(await screen.findByText('Пока не из чего собрать тренировку: разбери больше партий')).toBeTruthy();
+    await waitFor(async () => expect(await loadActiveLesson()).toBeNull());
+  });
+
   it('урок партии из базы: задачи по ходу партии, номер урока — по числу пройденных', async () => {
     await db.gamePuzzles.bulkPut([gp(9, ['d2d4', 'd7d5']), gp(5, ['e2e4', 'e7e5'])]);
     await db.lessons.put({ nodeId: 'game:x', lessonIndex: 0, clean: 0, total: 2 });

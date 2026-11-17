@@ -61,8 +61,10 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
   const [failed, setFailed] = useState<string | null>(null);
   /** Сбой чтения ника после сохранения: текст для экрана. */
   const [userError, setUserError] = useState<string | null>(null);
+  /** Растёт по «Повторить» после сбоя чтения списка. */
+  const [attempt, setAttempt] = useState(0);
 
-  // Список перечитывается из базы, когда растёт revision.
+  // Список перечитывается из базы, когда растёт revision (или по «Повторить»).
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -74,10 +76,10 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
       setFailed(null);
     })().catch((e: unknown) => {
       console.error('Не удалось прочитать партии', e);
-      if (alive) setFailed('Не удалось открыть список партий');
+      if (alive) setFailed(`Не удалось открыть список партий: ${describeError(e)}`);
     });
     return () => { alive = false; };
-  }, [state.revision]);
+  }, [state.revision, attempt]);
 
   /** «Повторить» после сбоя разбора: очередь перечитывает базу и снова запускается. */
   async function retryAnalysis() {
@@ -98,7 +100,11 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
 
   if (failed) {
     return (
-      <section className="games"><h1>Партии</h1><p className="games-note">{failed}</p></section>
+      <section className="games">
+        <h1>Партии</h1>
+        <p className="games-note" role="alert">{failed}</p>
+        <BigButton variant="surface" onClick={() => setAttempt((n) => n + 1)}>Повторить</BigButton>
+      </section>
     );
   }
   if (user === undefined) return <section className="games" aria-busy="true" />;
@@ -125,6 +131,9 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
 
   const loading = state.sync === 'loading';
   const { queue } = state;
+  // Сами в фоне разбираются только рапид и партии по переписке: их и считаем, в покое и во время разбора.
+  const own = (games ?? []).filter((g) => g.timeClass === 'rapid' || g.timeClass === 'daily');
+  const done = own.filter((g) => analyses.get(g.id)?.rulesVersion === CONFIG.RULES_VERSION).length;
   let status: string;
   if (loading) {
     status = state.syncProgress
@@ -132,13 +141,8 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
   } else if (state.sync === 'offline') status = 'Нет сети, список не обновлён';
   else if (state.sync === 'error') status = state.syncError ?? 'Не удалось загрузить партии';
   else if (queue.lastError) status = queue.lastError;
-  else if (queue.running) {
-    // сами в фоне разбираются только рапид и партии по переписке; в очереди этих чисел нет
-    const own = (games ?? []).filter((g) => g.timeClass === 'rapid' || g.timeClass === 'daily');
-    const done = own.filter((g) => analyses.get(g.id)?.rulesVersion === CONFIG.RULES_VERSION).length;
-    status = `Идёт разбор: разобрано ${done} из ${own.length}`;
-  }
-  else status = `Разобрано ${queue.analysed} из ${queue.total}`;
+  else if (queue.running) status = `Идёт разбор: разобрано ${done} из ${own.length}`;
+  else status = `Разобрано ${done} из ${own.length}`;
 
   return (
     <section className="games">

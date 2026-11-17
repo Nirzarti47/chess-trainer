@@ -39,7 +39,7 @@ export function isBrilliant(a: { loss: number; fenBefore: string; move: string; 
   mover: Side }): boolean {
   if (a.loss >= CONFIG.BRILLIANT_MAX_LOSS) return false;
   if (expected(a.before, a.mover) > CONFIG.BRILLIANT_MAX_BEFORE) return false;
-  if (expected(a.after, a.mover) < 0.5) return false;
+  if (expected(a.after, a.mover) < CONFIG.BRILLIANT_MIN_AFTER) return false;
 
   const chess = new Chess(a.fenBefore);
   let taken: number;
@@ -52,7 +52,7 @@ export function isBrilliant(a: { loss: number; fenBefore: string; move: string; 
   const fenAfter = chess.fen();
   // у соперника есть выгодное взятие фигуры (не пешки) сыгравшего, и сам ход столько не взял
   return chess.moves({ verbose: true }).some((m) => {
-    if (!m.captured || PIECE_VALUE[m.captured] < 3) return false;
+    if (!m.captured || PIECE_VALUE[m.captured] < CONFIG.PIECE_MIN_VALUE) return false;
     const gain = see(fenAfter, m.from + m.to + (m.promotion ?? ''));
     return gain >= CONFIG.MATERIAL_WIN && taken < gain;
   });

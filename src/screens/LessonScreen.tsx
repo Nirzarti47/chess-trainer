@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { isGamePuzzleId } from '../analysis/gamePuzzles';
 import {
   clearActiveLesson, completeLesson, getLessonProgress, getSeenPuzzleIds, loadActiveLesson, recordTaskResult,
   saveActiveLesson, type ActiveLesson,
@@ -13,7 +14,6 @@ import { XP } from '../domain/xp';
 import { BigButton } from '../ui/BigButton';
 import { ProgressBar } from '../ui/ProgressBar';
 import { Sheet } from '../ui/Sheet';
-import { GAME_NODE_PREFIX } from './gameLessons';
 import { describeError, LessonNotFoundError } from './lessonErrors';
 import { lessonFactory as realLessonFactory } from './lessonFactory';
 import { LessonSummary, type LessonSummaryData } from './LessonSummary';
@@ -145,11 +145,10 @@ function canResume(a: SavedLesson | null, nodeId: string, lessonIndex: number): 
     && a.source !== undefined && a.tasks.length > 0 && a.cursor < a.tasks.length + a.retry.length;
 }
 
-/** Задачи урока из партии живут в базе и пропадают при новом разборе или смене ника.
- *  Такой урок продолжается, только если все его задачи ещё есть; остальные уроки — как прежде. */
+/** Задачи из партий (id на 'g:') живут в базе и пропадают при новом разборе или смене ника.
+ *  Урок с такими задачами («Исправить ошибки», «Частые ошибки») продолжается, только если все они ещё есть. */
 async function tasksStillExist(a: SavedLesson): Promise<boolean> {
-  if (!a.nodeId.startsWith(GAME_NODE_PREFIX)) return true;
-  const ids = a.tasks.flatMap((t) => (t.kind === 'puzzle' ? [t.puzzle.id] : []));
+  const ids = a.tasks.flatMap((t) => (t.kind === 'puzzle' && isGamePuzzleId(t.puzzle.id) ? [t.puzzle.id] : []));
   const found = await Promise.all(ids.map((id) => findPuzzle(id)));
   return found.every((p) => p !== undefined);
 }

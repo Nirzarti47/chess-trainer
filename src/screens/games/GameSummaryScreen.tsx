@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { KIND_ADVICE, KIND_TITLE } from '../../analysis/phrases';
 import { getCurrentAnalysis, getGame, getGamePuzzles } from '../../data/gamesRepo';
 import type { GameAnalysis, GameRecord, MistakeKind } from '../../domain/gameTypes';
@@ -48,6 +48,9 @@ export function GameSummaryScreen() {
   const state = useGamesState();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  // Пришли из задачи через устаревший разбор: номер хода (?ply=) ведём дальше в разбор.
+  const ply = useSearchParams()[0].get('ply');
+  const plyQuery = ply === null ? '' : `?ply=${encodeURIComponent(ply)}`;
 
   useEffect(() => {
     let alive = true;
@@ -182,7 +185,7 @@ export function GameSummaryScreen() {
         <p className="summary-took">Задач из этой партии нет: ни в одной ошибке не нашлось одного ясно лучшего хода</p>
       )}
       <div className="summary-actions">
-        <BigButton onClick={() => navigate(`/games/${game.id}/review`)}>Смотреть разбор</BigButton>
+        <BigButton onClick={() => navigate(`/games/${game.id}/review${plyQuery}`)}>Смотреть разбор</BigButton>
         {puzzleCount > 0 && (
           <BigButton variant="surface" onClick={() => navigate(`/games/${game.id}/fix`)}>
             {`Исправить ошибки (${puzzleCount})`}

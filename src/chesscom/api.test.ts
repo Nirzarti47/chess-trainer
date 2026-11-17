@@ -10,7 +10,7 @@ const reply = (status: number, body: unknown = {}): typeof fetch =>
 
 describe('normalizeNick', () => {
   it('обрезает пробелы и приводит к нижнему регистру', () => {
-    expect(normalizeNick(' Nirzarti ')).toBe('nirzarti');
+    expect(normalizeNick(' Owner_Test ')).toBe('owner_test');
   });
 });
 

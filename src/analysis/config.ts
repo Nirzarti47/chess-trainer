@@ -7,7 +7,10 @@ export const CONFIG = {
   GOOD_MAX: 0.05, INACCURACY_MAX: 0.10, MISTAKE_MAX: 0.20,
   ALT_MAX_LOSS: 0.05,            // варианты «Лучше было»: уступают лучшему меньше этого
   GREAT_GAP: 0.10, BRILLIANT_MAX_LOSS: 0.02, BRILLIANT_MAX_BEFORE: 0.90,
+  BRILLIANT_MIN_AFTER: 0.5,      // после блестящего хода позиция не хуже равной
   MATE_KIND_MAX: 3, MATERIAL_WIN: 2,
+  LINE_PLIES: 3,                 // сколько полуходов линии смотреть, считая выигрыш материала
+  PIECE_MIN_VALUE: 3,            // «фигура», а не пешка: цена от 3
   PUZZLE_MAX: 8, UNIQUE_MARGIN: 0.15, PUZZLE_MIN_BEST: 0.35,
   AUTO_GAMES: 20, PATTERN_SIZE: 10, PATTERN_OWN_MAX: 6, FEW_GAMES: 3, FEW_MISTAKES: 10,
 } as const;

@@ -65,6 +65,7 @@ function Where() {
   return (
     <>
       <p data-testid="where">{useLocation().pathname}</p>
+      <p data-testid="search">{useLocation().search}</p>
       <button type="button" onClick={() => navigate(-1)}>назад по истории</button>
     </>
   );
@@ -458,6 +459,14 @@ describe('ReviewScreen: нет данных', () => {
     expect((await screen.findByTestId('where')).textContent).toBe('/games/g1');
     fireEvent.click(screen.getByRole('button', { name: 'назад по истории' }));
     await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/games'));
+  });
+
+  it('М6: разбор устарел — номер хода из ?ply= уходит в адрес сводки', async () => {
+    await putGames([game()]);
+    await saveAnalysis(analysis({ rulesVersion: CONFIG.RULES_VERSION - 1 }), { put: [], removeIds: [] });
+    renderReview('/games/g1/review?ply=5');
+    expect((await screen.findByTestId('where')).textContent).toBe('/games/g1');
+    expect(screen.getByTestId('search').textContent).toBe('?ply=5');
   });
 
   it('испорченная партия (недопустимый ход) — свой текст и «К партии»', async () => {

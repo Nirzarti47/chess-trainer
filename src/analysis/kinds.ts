@@ -31,12 +31,12 @@ function mateFor(score: Score | undefined, side: Side): number | null {
   return n > 0 && n <= CONFIG.MATE_KIND_MAX ? n : null;
 }
 
-/** Что отдано и что взято в первых трёх полуходах линии, начатой сыгравшим. */
+/** Что отдано и что взято в первых LINE_PLIES полуходах линии, начатой сыгравшим. */
 function trade(fen: string, line: string[]): { given: PieceSymbol[]; taken: PieceSymbol[] } {
   const chess = new Chess(fen);
   const given: PieceSymbol[] = [];
   const taken: PieceSymbol[] = [];
-  for (let i = 0; i < Math.min(3, line.length); i++) {
+  for (let i = 0; i < Math.min(CONFIG.LINE_PLIES, line.length); i++) {
     const m = playUci(chess, line[i]);
     if (!m) break;
     if (m.captured) (i % 2 === 0 ? taken : given).push(m.captured);
@@ -104,7 +104,8 @@ export function classifyMistake(a: { fenBefore: string; played: string; best: Al
     // соперник отвечает на поле сыгранного хода (там фигура сыгравшего, так что это взятие)
     const sameSquare = r?.to === played.to;
     // 3. Невыгодный размен: сыгранный ход — взятие, соперник отбивает на том же поле
-    if (played.captured && sameSquare && swing(a.fenBefore, [a.played, ...reply], 3) <= -CONFIG.MATERIAL_WIN) {
+    if (played.captured && sameSquare
+      && swing(a.fenBefore, [a.played, ...reply], CONFIG.LINE_PLIES) <= -CONFIG.MATERIAL_WIN) {
       const { given, taken } = trade(a.fenBefore, [a.played, ...reply]);
       if (given.length > 0 && taken.length > 0) {
         const gave = given.map((p) => PIECE[p].nom).join(' и ');
@@ -116,7 +117,7 @@ export function classifyMistake(a: { fenBefore: string; played: string; best: Al
     // взятое сыгранным ходом вычитается только при размене на том же поле (равный размен не ошибка)
     const gained = played.captured && sameSquare ? PIECE_VALUE[played.captured] : 0;
     if (r?.captured && !r.flags.includes('e') && PIECE_VALUE[r.captured] >= CONFIG.MATERIAL_WIN
-      && swing(fenAfter, reply, 3) - gained >= CONFIG.MATERIAL_WIN) {
+      && swing(fenAfter, reply, CONFIG.LINE_PLIES) - gained >= CONFIG.MATERIAL_WIN) {
       if (sameSquare) {
         const p = played.promotion ?? played.piece;
         return { kind: 'pieceEnPrise', phrase: `${cap(PIECE[p].nom)} поставлен${ending(p, 'а', '')} под бой: `
@@ -134,7 +135,7 @@ export function classifyMistake(a: { fenBefore: string; played: string; best: Al
   if (top && top.move !== a.played) {
     const board = new Chess(a.fenBefore);
     const m = playUci(board, top.move);
-    const wins = swing(a.fenBefore, top.pv, 3) >= CONFIG.MATERIAL_WIN;
+    const wins = swing(a.fenBefore, top.pv, CONFIG.LINE_PLIES) >= CONFIG.MATERIAL_WIN;
     // 6. Пропущен захват: первым ходом лучшей линии берётся фигура; если берётся пешка, нужна
     // фигура, взятая в этих трёх полуходах. Сыгранный ход, забравший на том же поле, захват не пропустил
     const tookSame = played?.captured !== undefined && played.to === m?.to;

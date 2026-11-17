@@ -69,11 +69,11 @@ beforeEach(async () => {
 describe('GamesScreen: ник', () => {
   it('без ника видна форма; ник нормализуется, сохраняется и запускает загрузку', async () => {
     renderGames();
-    fireEvent.change(await screen.findByLabelText('Ник на Chess.com'), { target: { value: ' Nirzarti ' } });
+    fireEvent.change(await screen.findByLabelText('Ник на Chess.com'), { target: { value: ' Owner_Test ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Найти партии' }));
     await waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
-    expect(fetchPlayer).toHaveBeenCalledWith('nirzarti');
-    expect(await getChessUser()).toEqual({ nick: 'nirzarti', loadedThrough: null });
+    expect(fetchPlayer).toHaveBeenCalledWith('owner_test');
+    expect(await getChessUser()).toEqual({ nick: 'owner_test', loadedThrough: null });
     expect(await screen.findByRole('button', { name: 'Обновить' })).toBeTruthy();
   });
 
@@ -165,7 +165,8 @@ describe('GamesScreen: список', () => {
   it('строка состояния: число разобранных и разбор; «Обновить» вызывает sync', async () => {
     store.state = { ...IDLE, queue: { total: 94, analysed: 15, running: null, lastError: null } };
     const { unmount } = renderGames();
-    expect(await screen.findByText('Разобрано 15 из 94')).toBeTruthy();
+    // М1: в покое считаются, как и во время разбора, только рапид и по переписке из списка
+    expect(await screen.findByText('Разобрано 2 из 2')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
     expect(sync).toHaveBeenCalledTimes(1);
     unmount();
@@ -180,6 +181,31 @@ describe('GamesScreen: список', () => {
     store.state = { ...IDLE, queue: { total: 4, analysed: 2, running: { gameId: 'fresh', done: 1, total: 2 }, lastError: null } };
     renderGames();
     expect(await screen.findByText('Идёт разбор: разобрано 2 из 3')).toBeTruthy();
+  });
+
+  it('М1: в покое и во время разбора числа одни и те же — без скачков между партиями', async () => {
+    await putGames([game('fresh', { endTime: Date.UTC(2026, 10, 14, 12) })]);
+    store.state = { ...IDLE, queue: { total: 4, analysed: 2, running: null, lastError: null } };
+    const { unmount } = renderGames();
+    expect(await screen.findByText('Разобрано 2 из 3')).toBeTruthy();
+    unmount();
+    store.state = { ...IDLE, queue: { total: 4, analysed: 2, running: { gameId: 'fresh', done: 1, total: 2 }, lastError: null } };
+    renderGames();
+    expect(await screen.findByText('Идёт разбор: разобрано 2 из 3')).toBeTruthy();
+  });
+
+  it('М4: сбой чтения списка — причина и «Повторить»; повтор открывает список', async () => {
+    const read = vi.spyOn(db.games, 'toArray').mockRejectedValueOnce(new Error('база закрыта'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      renderGames();
+      expect(await screen.findByText('Не удалось открыть список партий: Error: база закрыта')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+      expect(await screen.findByRole('list', { name: 'Партии' })).toBeTruthy();
+    } finally {
+      read.mockRestore();
+      log.mockRestore();
+    }
   });
 
   it('загрузка показывает ход; ошибка — текст и «Повторить»', async () => {

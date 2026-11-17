@@ -48,11 +48,12 @@ const puzzle = (gameId: string, ply: number): GamePuzzle => ({
 });
 
 function Where() {
-  return <p data-testid="where">{useLocation().pathname}</p>;
+  const { pathname, search } = useLocation();
+  return <><p data-testid="where">{pathname}</p><p data-testid="search">{search}</p></>;
 }
 
-const summaryTree = (id = 'g1') => (
-  <MemoryRouter initialEntries={['/games/' + id]}>
+const summaryTree = (id = 'g1', search = '') => (
+  <MemoryRouter initialEntries={['/games/' + id + search]}>
     <Routes>
       <Route path="/games/:gameId" element={<GameSummaryScreen />} />
       <Route path="*" element={<Where />} />
@@ -182,6 +183,15 @@ describe('GameSummaryScreen', () => {
     renderSummary();
     fireEvent.click(await screen.findByRole('button', { name: 'Смотреть разбор' }));
     expect(screen.getByTestId('where').textContent).toBe('/games/g1/review');
+  });
+
+  it('М6: сводка, открытая с ?ply=, ведёт в разбор с тем же ходом', async () => {
+    await putGames([game('g1')]);
+    await saveAnalysis(analysis('g1', side(), side()), { put: [], removeIds: [] });
+    render(summaryTree('g1', '?ply=5'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Смотреть разбор' }));
+    expect(screen.getByTestId('where').textContent).toBe('/games/g1/review');
+    expect(screen.getByTestId('search').textContent).toBe('?ply=5');
   });
 
   it('без разбора вызван open и видна полоса', async () => {
