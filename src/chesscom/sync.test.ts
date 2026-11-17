@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../data/db';
-import { getChessUser, getGames, setChessUser } from '../data/gamesRepo';
+import { changeNick, getChessUser, getGames, setChessUser } from '../data/gamesRepo';
 import { syncGames } from './sync';
 import archives from './fixtures/archives.json';
 import month from './fixtures/month.json';
@@ -67,6 +67,33 @@ describe('syncGames', () => {
   it('негодная партия пропускается, годная сохраняется', async () => {
     await syncGames({ fetchFn: makeFetch({ games: m => (m === '2026/09' ? [a, month.games[4]] : []) }) });
     expect((await getGames()).map(g => g.id)).toEqual([a.uuid]);
+  });
+
+  it('И1: ник сменили между месяцами — загрузка останавливается без записи', async () => {
+    const base = makeFetch({ games: gamesOf });
+    const fetchFn = (async (input: RequestInfo | URL) => {
+      // ник сменили, пока шёл запрос второго месяца прежнего ника
+      if (String(input).endsWith('/2026/10')) await changeNick('rival_one');
+      return base(input);
+    }) as typeof fetch;
+    await syncGames({ fetchFn });
+    expect(await getChessUser()).toEqual({ nick: 'rival_one', loadedThrough: null });
+    expect(await getGames()).toEqual([]);
+  });
+
+  it('И1: ник сменили и вернули прежний посреди загрузки — загрузка не продолжает с середины', async () => {
+    const base = makeFetch({ games: gamesOf });
+    const fetchFn = (async (input: RequestInfo | URL) => {
+      if (String(input).endsWith('/2026/10')) {
+        await changeNick('rival_one');
+        await changeNick('owner_test');
+      }
+      return base(input);
+    }) as typeof fetch;
+    await syncGames({ fetchFn });
+    // следующая загрузка начнёт с первого месяца, а не с 2026/10
+    expect(await getChessUser()).toEqual({ nick: 'owner_test', loadedThrough: null });
+    expect(await getGames()).toEqual([]);
   });
 
   it('без ника ничего не запрашивает', async () => {

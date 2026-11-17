@@ -60,30 +60,42 @@ function failure(e: unknown): Partial<GamesState> {
   return { sync: 'error', syncError: `Не удалось загрузить партии: ${describeError(e)}` };
 }
 
-let syncing: Promise<void> | null = null;
-
-/** Загружает новые партии, затем перечитывает очередь и запускает её. Не бросает: ошибка уходит в состояние. */
-export function syncNow(): Promise<void> {
-  if (!syncing) {
-    syncing = (async () => {
-      set({ sync: 'loading', syncError: null, syncProgress: null });
-      try {
-        await syncGames({ onProgress: (done, total) => set({ syncProgress: { done, total } }) });
-        set({ sync: 'idle', syncProgress: null, revision: state.revision + 1 });
-      } catch (e) {
-        set({ ...failure(e), syncProgress: null });
-      }
-      // Даже без сети разбираем то, что уже загружено.
-      try {
-        await gamesQueue.refresh();
-        gamesQueue.start();
-      } catch {
-        // Очередь прочитает базу при следующем запуске.
-      }
-    })().finally(() => {
-      syncing = null;
-    });
+async function syncOnce() {
+  set({ sync: 'loading', syncError: null, syncProgress: null });
+  try {
+    await syncGames({ onProgress: (done, total) => set({ syncProgress: { done, total } }) });
+    set({ sync: 'idle', syncProgress: null, revision: state.revision + 1 });
+  } catch (e) {
+    set({ ...failure(e), syncProgress: null });
   }
+  // Даже без сети разбираем то, что уже загружено.
+  try {
+    await gamesQueue.refresh();
+    gamesQueue.start();
+  } catch {
+    // Очередь прочитает базу при следующем запуске.
+  }
+}
+
+let syncing: Promise<void> | null = null;
+/** Загрузку попросили, пока шла прежняя (например, сменили ник): нужен ещё один проход. */
+let again = false;
+
+/** Загружает новые партии, затем перечитывает очередь и запускает её. Не бросает: ошибка уходит в состояние.
+ *  Вызов во время загрузки запускает ещё один проход сразу после неё; ответ — после последнего прохода. */
+export function syncNow(): Promise<void> {
+  if (syncing) {
+    again = true;
+    return syncing;
+  }
+  syncing = (async () => {
+    do {
+      again = false;
+      await syncOnce();
+    } while (again);
+  })().finally(() => {
+    syncing = null;
+  });
   return syncing;
 }
 

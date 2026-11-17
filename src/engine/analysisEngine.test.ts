@@ -308,6 +308,28 @@ describe('analyse: сбои', () => {
     expect(factory).toHaveBeenCalledTimes(4);
   });
 
+  it('И2: paused() — null без паузы; на паузе обещание, выполненное в её конце', async () => {
+    vi.useFakeTimers();
+    const factory = vi.fn((): Worker => {
+      throw new Error('no wasm');
+    });
+    const engine = createAnalysisEngine(factory);
+    expect(engine.paused()).toBeNull();
+    for (let i = 0; i < 2; i++) expect(await engine.analyse(START, SCREEN)).toBeNull();
+    expect(engine.paused()).toBeNull();
+    // ответ на третий сбой уже видит паузу: очередь отличает её от неудачи партии
+    expect(await engine.analyse(START, SCREEN)).toBeNull();
+    const pause = engine.paused();
+    expect(pause).not.toBeNull();
+    const ended = track(pause!);
+    await vi.advanceTimersByTimeAsync(59999);
+    expect(ended.done).toBe(false);
+    expect(engine.paused()).toBe(pause);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(ended.done).toBe(true);
+    expect(engine.paused()).toBeNull();
+  });
+
   it('удачный ответ обнуляет счёт неудач, отмена неудачей не считается', async () => {
     vi.useFakeTimers();
     let fail = true;

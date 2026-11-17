@@ -2,11 +2,12 @@ import 'fake-indexeddb/auto';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { CONFIG } from '../../analysis/config';
+import { ENGINE_FAILED } from '../../analysis/queue';
 import { db } from '../../data/db';
 import { getChessUser, putGames, saveAnalysis, setChessUser } from '../../data/gamesRepo';
 import { ChessComError } from '../../chesscom/api';
 import type { GameAnalysis, GameRecord, Grade, SideSummary } from '../../domain/gameTypes';
-import type { GamesState } from '../../games/gamesStore';
+import { gamesQueue, type GamesState } from '../../games/gamesStore';
 import { GamesScreen } from './GamesScreen';
 
 // Состояние загрузки подменяется; остальное в хранилище настоящее.
@@ -192,6 +193,31 @@ describe('GamesScreen: список', () => {
     expect(await screen.findByText('Chess.com ответил ошибкой: 500')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
     expect(sync).toHaveBeenCalledTimes(1);
+  });
+
+  it('И2: сбой разбора — его текст и «Повторить» (перечитать и запустить очередь); без сбоя их нет', async () => {
+    const refresh = vi.spyOn(gamesQueue, 'refresh').mockResolvedValue();
+    const start = vi.spyOn(gamesQueue, 'start').mockImplementation(() => {});
+    try {
+      store.state = { ...IDLE, queue: { total: 3, analysed: 1, running: null, lastError: ENGINE_FAILED } };
+      const { unmount } = renderGames();
+      expect((await screen.findByRole('status')).textContent).toBe(ENGINE_FAILED);
+      fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+      await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(sync).not.toHaveBeenCalled();
+      unmount();
+
+      // успешный разбор сбросил lastError: строка снова о числе разобранных
+      store.state = { ...IDLE, queue: { total: 3, analysed: 2, running: null, lastError: null } };
+      renderGames();
+      await screen.findByRole('list', { name: 'Партии' });
+      expect(screen.queryByText(ENGINE_FAILED)).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Повторить' })).toBeNull();
+    } finally {
+      refresh.mockRestore();
+      start.mockRestore();
+    }
   });
 
   it('ссылка «Частые ошибки» ведёт на /games/patterns', async () => {

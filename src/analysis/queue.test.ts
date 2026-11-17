@@ -3,7 +3,7 @@ import { Chess } from 'chess.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../data/db';
 import * as repo from '../data/gamesRepo';
-import { getAnalysis, getGamePuzzles, putGames, saveAnalysis } from '../data/gamesRepo';
+import { changeNick, getAnalysis, getGamePuzzles, putGames, saveAnalysis } from '../data/gamesRepo';
 import type { GameAnalysis, GameRecord, SideSummary, TimeClass } from '../domain/gameTypes';
 import type { AnalysisEngine, AnalysisPriority } from '../engine/analysisEngine';
 import { CONFIG } from './config';
@@ -264,9 +264,67 @@ describe('очередь разбора', () => {
     expect(order).toEqual(['bad', 'g1', 'g2', 'bad']);
     // две попытки по два запроса + две партии по пять позиций
     expect(calls).toBe(2 * 2 + 2 * (CYCLE.length + 1));
-    await queue.refresh();
     await new Promise(r => setTimeout(r, 30));
     expect(calls).toBe(14);
+    // И2: refresh и start забывают неудачи — исключённая партия снова получает две попытки
+    await queue.refresh();
+    await vi.waitFor(() => expect(calls).toBe(18));
+    queue.start();
+    await vi.waitFor(() => expect(calls).toBe(22));
+    await new Promise(r => setTimeout(r, 30));
+    expect(calls).toBe(22);
+    expect(queue.status().analysed).toBe(2);
+  });
+
+  it('И2: движок на паузе — партии не исключаются, цикл ждёт и после паузы разбирает', async () => {
+    await putGames([game('a', 200), game('b', 100), game('x', 50, 'blitz')]);
+    const inner = tableEngine({});
+    let end = () => {};
+    let pause: Promise<void> | null = new Promise<void>(r => {
+      end = () => {
+        pause = null;
+        r();
+      };
+    });
+    let calls = 0;
+    const engine: Pick<AnalysisEngine, 'analyse' | 'paused'> = {
+      async analyse(fen, opts) {
+        calls++;
+        return pause ? null : inner.analyse(fen, opts);
+      },
+      paused: () => pause,
+    };
+    const { queue } = makeQueue(engine);
+    queue.start();
+    await vi.waitFor(() => {
+      expect(queue.status().lastError).toBe(ENGINE_FAILED);
+      expect(queue.status().running).toBeNull();
+    });
+    // открытая партия на паузе сразу получает null, а не ждёт минуту
+    expect(await queue.open('x')).toBeNull();
+    await new Promise(r => setTimeout(r, 30));
+    // фон стоит, а не проваливает партии одну за другой
+    expect(calls).toBe(2);
+    end();
+    await idle(queue, 2);
+    expect((await db.analyses.toArray()).map(a => a.gameId).sort()).toEqual(['a', 'b']);
+    expect(queue.status().lastError).toBeNull();
+  });
+
+  it('И2: lastError сбрасывается при успешном разборе', async () => {
+    await putGames([game('a', 200), game('b', 100)]);
+    const inner = tableEngine({});
+    let n = 0;
+    const engine: Pick<AnalysisEngine, 'analyse'> = {
+      analyse: async (fen, opts) => (++n === 1 ? null : inner.analyse(fen, opts)),
+    };
+    const { queue } = makeQueue(engine);
+    const errors: (string | null)[] = [];
+    queue.subscribe(() => errors.push(queue.status().lastError));
+    queue.start();
+    await idle(queue, 2);
+    expect(errors).toContain(ENGINE_FAILED);
+    expect(queue.status().lastError).toBeNull();
   });
 
   it('первая же неудача партии ставит текст ошибки: open получает null, текст уже на месте', async () => {
@@ -352,13 +410,37 @@ describe('очередь разбора', () => {
     expect(Math.min(...analysedSeen.slice(analysedSeen.lastIndexOf(1)))).toBe(1);
   });
 
+  it('И1: смена ника — reset забывает разборы сеанса: общая партия у нового ника разбирается заново', async () => {
+    await putGames([game('a', 100)]);
+    const { queue } = makeQueue(spyEngine().engine);
+    queue.start();
+    await idle(queue, 1);
+    // партия есть и у прежнего, и у нового ника: после смены ника её разбора в базе нет
+    await changeNick('rival_one');
+    await putGames([game('a', 100)]);
+    await queue.reset();
+    await idle(queue, 1);
+    expect(await getAnalysis('a')).toBeDefined();
+  });
+
   it('сбой чтения базы: open возвращает null, следующий open читает заново и разбирает', async () => {
     await putGames([game('a', 100, 'blitz')]);
     vi.spyOn(repo, 'getGames').mockRejectedValueOnce(new Error('база недоступна'));
     const { queue } = makeQueue(spyEngine().engine);
     expect(await queue.open('a')).toBeNull();
+    // М3: причина сбоя базы — своим текстом
+    expect(queue.status().lastError).toBe('Не удалось прочитать партии: Error: база недоступна');
     expect((await queue.open('a'))?.gameId).toBe('a');
     expect(queue.status().analysed).toBe(1);
+    expect(queue.status().lastError).toBeNull();
+  });
+
+  it('М3: сбой базы при сохранении разбора — свой текст, а не «движок не ответил»', async () => {
+    await putGames([game('b', 100, 'blitz')]);
+    vi.spyOn(repo, 'saveAnalysis').mockRejectedValueOnce(new Error('диск полон'));
+    const { queue } = makeQueue(spyEngine().engine);
+    expect(await queue.open('b')).toBeNull();
+    expect(queue.status().lastError).toBe('Не удалось сохранить разбор: Error: диск полон');
   });
 
   it('подписчик слышит смену running и analysed; снимок стабилен между изменениями', async () => {

@@ -17,7 +17,7 @@ export interface NickFormProps {
 
 async function changeAndRefresh(nick: string) {
   await changeNick(nick);
-  await gamesQueue.refresh();
+  await gamesQueue.reset();
 }
 
 function errorText(e: unknown): string {

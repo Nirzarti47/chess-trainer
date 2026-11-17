@@ -3,9 +3,11 @@ import { act, render, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChessComError } from '../chesscom/api';
 import { syncGames } from '../chesscom/sync';
+import archives from '../chesscom/fixtures/archives.json';
+import month from '../chesscom/fixtures/month.json';
 import { db } from '../data/db';
-import { setChessUser } from '../data/gamesRepo';
-import { GamesBackground, syncNow, useGamesState } from './gamesStore';
+import { changeNick, getChessUser, getGames, setChessUser } from '../data/gamesRepo';
+import { GamesBackground, gamesQueue, syncNow, useGamesState } from './gamesStore';
 
 vi.mock('../chesscom/sync', () => ({ syncGames: vi.fn() }));
 const sync = vi.mocked(syncGames);
@@ -79,6 +81,54 @@ describe('syncNow', () => {
     expect(result.current.syncError).toBeNull();
     expect(result.current.syncProgress).toBeNull();
     expect(result.current.revision).toBeGreaterThan(before);
+  });
+
+  it('И1: syncNow во время загрузки — ещё один проход сразу после текущего', async () => {
+    let release = () => {};
+    sync.mockImplementationOnce(() => new Promise(r => { release = () => r({ added: 0 }); }));
+    sync.mockResolvedValue({ added: 0 });
+    const first = syncNow();
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
+    void syncNow();
+    void syncNow();
+    release();
+    await act(() => first);
+    expect(sync).toHaveBeenCalledTimes(2);
+  });
+
+  it('И1: смена ника посреди загрузки — ник новый, партий прежнего нет, новый загружен целиком', async () => {
+    const real = await vi.importActual<typeof import('../chesscom/sync')>('../chesscom/sync');
+    // Разбор здесь ни при чём: очередь не трогаем.
+    const refresh = vi.spyOn(gamesQueue, 'refresh').mockResolvedValue();
+    const start = vi.spyOn(gamesQueue, 'start').mockImplementation(() => {});
+    try {
+      await setChessUser({ nick: 'owner_test', loadedThrough: null });
+      const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+      const [a, b] = month.games;
+      let changed = false;
+      const fetchFn = (async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/games/archives')) return json(archives);
+        const m = url.split('/').slice(-2).join('/');
+        if (!changed && m === '2026/10') {
+          changed = true;
+          // Как в NickForm: прежние партии стёрты, ник новый, загрузка запрошена.
+          await changeNick('rival_one');
+          void syncNow();
+        }
+        return json({ games: [{ ...a, uuid: `${a.uuid}-${m}` }, { ...b, uuid: `${b.uuid}-${m}` }] });
+      }) as typeof fetch;
+      sync.mockImplementation(deps => real.syncGames({ ...deps, fetchFn }));
+      await act(() => syncNow());
+      expect(await getChessUser()).toEqual({ nick: 'rival_one', loadedThrough: '2026/11' });
+      const games = await getGames();
+      // у rival_one в каждом месяце одна партия: первая образца, он в ней чёрными
+      expect(games.map(g => g.id).sort()).toEqual(['2026/09', '2026/10', '2026/11'].map(m => `${a.uuid}-${m}`));
+      expect(games.every(g => g.userColor === 'black')).toBe(true);
+    } finally {
+      refresh.mockRestore();
+      start.mockRestore();
+    }
   });
 
   it('снимок состояния стабилен между изменениями', () => {

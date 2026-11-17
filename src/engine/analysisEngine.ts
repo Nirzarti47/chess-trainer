@@ -14,6 +14,9 @@ export interface AnalysisEngine {
   /** Линии последней завершённой глубины, сильнейшая первой. null — сбой, таймаут, отмена. Никогда не отклоняется.
    *  Для позиции без ходов (мат, пат) — пустой список; такие позиции движку не отдаются. */
   analyse(fen: string, opts: AnalyseOptions): Promise<EngineLine[] | null>;
+  /** Пауза после сбоев подряд (в это время analyse сразу отвечает null): обещание, выполненное в её конце.
+   *  null — паузы нет. Так null из-за паузы отличается от неудачи позиции. */
+  paused(): Promise<void> | null;
 }
 
 const DEFAULT_TIMEOUT_MS = 20000;
@@ -59,7 +62,8 @@ export function createAnalysisEngine(workerFactory: () => Worker): AnalysisEngin
   let current: Run | null = null;
   const queues: Record<AnalysisPriority, Request[]> = { screen: [], background: [] };
   let failures = 0;
-  let coolingDown = false;
+  /** Идущая пауза; выполняется в её конце. */
+  let pause: Promise<void> | null = null;
 
   function discard(w: Worker) {
     if (worker !== w) return;
@@ -156,13 +160,15 @@ export function createAnalysisEngine(workerFactory: () => Worker): AnalysisEngin
   }
 
   function coolDown() {
-    coolingDown = true;
+    pause = new Promise<void>(resolve => {
+      setTimeout(() => {
+        pause = null;
+        resolve();
+      }, COOLDOWN_MS);
+    });
     failures = 0;
     for (const req of queues.screen.splice(0)) req.finish(null);
     for (const req of queues.background.splice(0)) req.finish(null);
-    setTimeout(() => {
-      coolingDown = false;
-    }, COOLDOWN_MS);
   }
 
   /** Отпускает запрос, а идущий поиск останавливает; ответ поиска будет выброшен. */
@@ -181,7 +187,7 @@ export function createAnalysisEngine(workerFactory: () => Worker): AnalysisEngin
   }
 
   function pump() {
-    if (current || coolingDown) return;
+    if (current || pause) return;
     const req = queues.screen.shift() ?? queues.background.shift();
     if (!req) return;
     const run: Run = { req, phase: 'starting', depths: new Map() };
@@ -230,7 +236,7 @@ export function createAnalysisEngine(workerFactory: () => Worker): AnalysisEngin
   function analyse(fen: string, opts: AnalyseOptions): Promise<EngineLine[] | null> {
     return new Promise<EngineLine[] | null>(resolve => {
       const { signal } = opts;
-      if (/[\r\n]/.test(fen) || coolingDown || signal?.aborted) {
+      if (/[\r\n]/.test(fen) || pause || signal?.aborted) {
         resolve(null);
         return;
       }
@@ -276,7 +282,7 @@ export function createAnalysisEngine(workerFactory: () => Worker): AnalysisEngin
     });
   }
 
-  return { analyse };
+  return { analyse, paused: () => pause };
 }
 
 function parseInfo(line: string): { depth: number; multipv: number; line: EngineLine } | null {

@@ -2,6 +2,7 @@
 import { getAnalyses, getAnalysis, getGamePuzzles, getGames, saveAnalysis } from '../data/gamesRepo';
 import type { GameAnalysis, GameRecord } from '../domain/gameTypes';
 import type { AnalysisEngine, AnalysisPriority } from '../engine/analysisEngine';
+import { describeError } from '../screens/lessonErrors';
 import { analyseGame } from './analyseGame';
 import { CONFIG } from './config';
 import { reconcile, selectPuzzles } from './gamePuzzles';
@@ -13,11 +14,15 @@ export interface AnalysisQueue {
   /** Ставит партию первой и считает с приоритетом screen. Готовый разбор текущей версии отдаёт сразу. */
   open(gameId: string): Promise<GameAnalysis | null>;
   setRange(gameIds: string[]): void;      // партии выбранного промежутка «Частых ошибок»
-  refresh(): Promise<void>;               // перечитать партии из базы (после загрузки или смены ника)
+  refresh(): Promise<void>;               // перечитать партии из базы (после загрузки)
+  /** Смена ника: забыть разборы и неудачи сеанса, перечитать партии. */
+  reset(): Promise<void>;
   status(): QueueStatus; subscribe(fn: () => void): () => void;
 }
 
 export const ENGINE_FAILED = 'Не удалось разобрать партию: движок не ответил';
+const SAVE_FAILED = 'Не удалось сохранить разбор';
+const READ_FAILED = 'Не удалось прочитать партии';
 
 /** Сами в фоне разбираются только партии с временем подумать. */
 const isSlow = (g: GameRecord) => g.timeClass === 'rapid' || g.timeClass === 'daily';
@@ -25,7 +30,9 @@ const isSlow = (g: GameRecord) => g.timeClass === 'rapid' || g.timeClass === 'da
 interface Job { gameId: string; priority: AnalysisPriority; controller: AbortController }
 interface Opening { promise: Promise<GameAnalysis | null>; resolve(a: GameAnalysis | null): void }
 
-export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analyse'>;
+/** paused у движка необязателен: без него null из-за паузы считается неудачей партии. */
+export function createAnalysisQueue(deps: {
+  engine: Pick<AnalysisEngine, 'analyse'> & Partial<Pick<AnalysisEngine, 'paused'>>;
   isVisible(): boolean; onVisibilityChange(fn: () => void): () => void }): AnalysisQueue {
   /** От новых к старым. */
   let games: GameRecord[] = [];
@@ -39,8 +46,10 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
   let range: string[] = [];
   /** Открытые партии; последняя открытая — первая. */
   const openings = new Map<string, Opening>();
-  /** Неудачи за сеанс: одна — партия в конец, две — исключена. */
+  /** Неудачи с последнего refresh или start: одна — партия в конец, две — исключена. */
   const failures = new Map<string, number>();
+  /** Пауза движка: фон ждёт её конца и продолжает сам. */
+  let pause: Promise<void> | null = null;
   let job: Job | null = null;
   let looping = false;
   let unlisten: (() => void) | null = null;
@@ -117,7 +126,7 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
   function next(): Job | null {
     const opened = [...openings.keys()].pop();
     if (opened !== undefined) return { gameId: opened, priority: 'screen', controller: new AbortController() };
-    if (!started) return null;
+    if (!started || pause) return null;
     const id = backgroundOrder()[0];
     return id === undefined ? null : { gameId: id, priority: 'background', controller: new AbortController() };
   }
@@ -129,7 +138,16 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
     o.resolve(a);
   }
 
-  /** Считает одну партию. Отмена (видимость, open, смена ника) неудачей не считается. */
+  function waitPause(p: Promise<void>) {
+    if (pause === p) return;
+    pause = p;
+    void p.then(() => {
+      if (pause === p) pause = null;
+      kick();
+    });
+  }
+
+  /** Считает одну партию. Отмена (видимость, open, смена ника) и пауза движка неудачей не считаются. */
   async function run(j: Job) {
     const game = byId.get(j.gameId);
     if (!game) {
@@ -143,6 +161,8 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
       analyse: (fen, opts) => deps.engine.analyse(fen, { ...opts, priority: j.priority }),
     };
     let saved: GameAnalysis | null = null;
+    /** Текст сбоя базы при сохранении; null — сбоя базы не было. */
+    let dbError: string | null = null;
     try {
       const a = await analyseGame(game, {
         engine, priority: j.priority, signal: j.controller.signal,
@@ -151,13 +171,17 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
         },
       });
       if (a && !j.controller.signal.aborted) {
-        const old = await getGamePuzzles(game.id);
-        await saveAnalysis(a, reconcile(old, selectPuzzles(game, a), a));
-        savedVersions.set(game.id, a.rulesVersion);
-        saved = a;
+        try {
+          const old = await getGamePuzzles(game.id);
+          await saveAnalysis(a, reconcile(old, selectPuzzles(game, a), a));
+          savedVersions.set(game.id, a.rulesVersion);
+          saved = a;
+        } catch (e) {
+          dbError = `${SAVE_FAILED}: ${describeError(e)}`;
+        }
       }
     } catch {
-      // Сбой базы считается неудачей партии, как и молчание движка.
+      // Сбой разбора считается неудачей партии, как и молчание движка.
     } finally {
       job = null;
     }
@@ -165,18 +189,20 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
       versions.set(game.id, saved.rulesVersion);
       failures.delete(game.id);
       settleOpening(game.id, saved);
-      update({ ...counts(), running: null });
+      update({ ...counts(), running: null, lastError: null });
       return;
     }
     if (j.controller.signal.aborted) {
       update({ running: null });
       return;
     }
-    const n = (failures.get(game.id) ?? 0) + 1;
-    failures.set(game.id, n);
+    // Движок на паузе после сбоев подряд: партия не виновата, фон ждёт конца паузы.
+    const enginePause = dbError === null ? deps.engine.paused?.() ?? null : null;
+    if (enginePause) waitPause(enginePause);
+    else failures.set(game.id, (failures.get(game.id) ?? 0) + 1);
     settleOpening(game.id, null);
     // Текст ставится при каждой неудаче: экран читает его сразу после ответа open.
-    update({ running: null, lastError: ENGINE_FAILED });
+    update({ running: null, lastError: dbError ?? ENGINE_FAILED });
   }
 
   async function loop() {
@@ -185,7 +211,8 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
     try {
       try {
         await ensureLoaded();
-      } catch {
+      } catch (e) {
+        update({ lastError: `${READ_FAILED}: ${describeError(e)}` });
         failOpenings(); // прочитать базу не вышло — следующий запуск прочитает заново
         return;
       }
@@ -203,9 +230,21 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
     void loop();
   }
 
+  async function refresh() {
+    failures.clear();
+    try {
+      await startLoad();
+    } catch (e) {
+      failOpenings();
+      throw e;
+    }
+    kick();
+  }
+
   return {
     start() {
       started = true;
+      failures.clear();
       listen();
       kick();
     },
@@ -223,7 +262,8 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
           const ready = await getAnalysis(gameId);
           if (ready && ready.rulesVersion === CONFIG.RULES_VERSION) return ready;
         }
-      } catch {
+      } catch (e) {
+        update({ lastError: `${READ_FAILED}: ${describeError(e)}` });
         return null; // open не бросает
       }
       const again = openings.get(gameId);
@@ -244,14 +284,12 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
       range = [...gameIds];
       kick();
     },
-    async refresh() {
-      try {
-        await startLoad();
-      } catch (e) {
-        failOpenings();
-        throw e;
-      }
-      kick();
+    refresh,
+    reset() {
+      savedVersions.clear();
+      failures.clear();
+      update({ lastError: null });
+      return refresh();
     },
     status: () => snapshot,
     subscribe(fn) {

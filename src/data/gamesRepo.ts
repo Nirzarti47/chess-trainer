@@ -51,6 +51,19 @@ export async function putGames(games: GameRecord[]): Promise<number> {
   });
 }
 
+/** Месяц загрузки одной транзакцией: партии и loadedThrough = month. Пишет, только если ник и loadedThrough
+ *  в базе те же, что в from (иначе ник сменили посреди загрузки): тогда ничего не пишет и отвечает null.
+ *  Возвращает число новых партий. */
+export async function putMonth(from: ChessUser, games: GameRecord[], month: string): Promise<number | null> {
+  return db.transaction('rw', [db.kv, db.games], async () => {
+    const now = await getChessUser();
+    if (!now || now.nick !== from.nick || now.loadedThrough !== from.loadedThrough) return null;
+    const added = await putGames(games);
+    await setChessUser({ nick: from.nick, loadedThrough: month });
+    return added;
+  });
+}
+
 /** От новых к старым. */
 export async function getGames(): Promise<GameRecord[]> {
   return (await db.games.toArray()).sort((a, b) => b.endTime - a.endTime);

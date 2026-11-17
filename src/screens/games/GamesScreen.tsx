@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { CONFIG } from '../../analysis/config';
 import { getAnalyses, getChessUser, getGames } from '../../data/gamesRepo';
 import type { ChessUser, GameAnalysis, GameRecord, TimeClass } from '../../domain/gameTypes';
-import { syncNow, useGamesState } from '../../games/gamesStore';
+import { gamesQueue, syncNow, useGamesState } from '../../games/gamesStore';
 import { BigButton } from '../../ui/BigButton';
 import { describeError } from '../lessonErrors';
 import { NickForm } from './NickForm';
@@ -79,6 +79,13 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
     return () => { alive = false; };
   }, [state.revision]);
 
+  /** «Повторить» после сбоя разбора: очередь перечитывает базу и снова запускается. */
+  async function retryAnalysis() {
+    // Сбой чтения не мешает: start прочитает базу ещё раз и сам покажет причину.
+    await gamesQueue.refresh().catch(() => {});
+    gamesQueue.start();
+  }
+
   async function reloadUser() {
     try {
       setUser(await getChessUser());
@@ -124,6 +131,7 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
       ? `Загружаю партии: ${state.syncProgress.done} из ${state.syncProgress.total}` : 'Загружаю партии…';
   } else if (state.sync === 'offline') status = 'Нет сети, список не обновлён';
   else if (state.sync === 'error') status = state.syncError ?? 'Не удалось загрузить партии';
+  else if (queue.lastError) status = queue.lastError;
   else if (queue.running) {
     // сами в фоне разбираются только рапид и партии по переписке; в очереди этих чисел нет
     const own = (games ?? []).filter((g) => g.timeClass === 'rapid' || g.timeClass === 'daily');
@@ -143,6 +151,9 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
       <div className="games-status">
         <p role="status">{status}</p>
         {state.sync === 'error' && <BigButton variant="surface" onClick={() => void sync()}>Повторить</BigButton>}
+        {state.sync === 'idle' && queue.lastError && (
+          <BigButton variant="surface" onClick={() => void retryAnalysis()}>Повторить</BigButton>
+        )}
       </div>
       <BigButton variant="surface" disabled={loading} onClick={() => void sync()}>Обновить</BigButton>
       {games && games.length === 0 && !loading && <p className="games-note">Партий пока нет</p>}
