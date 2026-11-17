@@ -16,7 +16,7 @@ describe('phrases', () => {
     for (const list of Object.values(THEMES_OF_KIND)) for (const id of list) expect(ids).toContain(id);
   });
   it('у каждого вида есть название и совет', () => {
-    expect(KIND_TITLE.pieceEnPrise).toBe('Фигура под боем');
+    expect(KIND_TITLE.pieceEnPrise).toBe('Фигура поставлена под бой');
     expect(KIND_TITLE.missedCheck).toBe('Пропущен сильный шах');
     expect(KIND_ADVICE.missedCheck).toBe('Перед ходом проверь все шахи — свои и соперника. '
       + 'Шах часто выигрывает фигуру, которая стоит за королём или без защиты.');
