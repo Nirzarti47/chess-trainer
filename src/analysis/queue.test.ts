@@ -311,6 +311,16 @@ describe('очередь разбора', () => {
     expect(queue.status().lastError).toBeNull();
   });
 
+  it('refresh снимает текст прошлого сбоя: «Повторить» не оставляет старую ошибку', async () => {
+    await putGames([game('x', 50, 'blitz')]);
+    const { queue } = makeQueue({ analyse: async () => null });
+    queue.start();
+    expect(await queue.open('x')).toBeNull();
+    expect(queue.status().lastError).toBe(ENGINE_FAILED);
+    await queue.refresh();
+    expect(queue.status().lastError).toBeNull();
+  });
+
   it('И2: lastError сбрасывается при успешном разборе', async () => {
     await putGames([game('a', 200), game('b', 100)]);
     const inner = tableEngine({});

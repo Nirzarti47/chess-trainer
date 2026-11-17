@@ -140,8 +140,8 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
       ? `Загружаю партии: ${state.syncProgress.done} из ${state.syncProgress.total}` : 'Загружаю партии…';
   } else if (state.sync === 'offline') status = 'Нет сети, список не обновлён';
   else if (state.sync === 'error') status = state.syncError ?? 'Не удалось загрузить партии';
-  else if (queue.lastError) status = queue.lastError;
   else if (queue.running) status = `Идёт разбор: разобрано ${done} из ${own.length}`;
+  else if (queue.lastError) status = queue.lastError;
   else status = `Разобрано ${done} из ${own.length}`;
 
   return (
@@ -155,7 +155,7 @@ export function GamesScreen({ fetchPlayer, sync = syncNow }: GamesScreenProps) {
       <div className="games-status">
         <p role="status">{status}</p>
         {state.sync === 'error' && <BigButton variant="surface" onClick={() => void sync()}>Повторить</BigButton>}
-        {state.sync === 'idle' && queue.lastError && (
+        {state.sync === 'idle' && queue.lastError && !queue.running && (
           <BigButton variant="surface" onClick={() => void retryAnalysis()}>Повторить</BigButton>
         )}
       </div>

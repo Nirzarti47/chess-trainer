@@ -232,6 +232,8 @@ export function createAnalysisQueue(deps: {
 
   async function refresh() {
     failures.clear();
+    // «Повторить»: прошлый текст сбоя снимается; если сбой не ушёл, он поставится снова
+    update({ lastError: null });
     try {
       await startLoad();
     } catch (e) {
