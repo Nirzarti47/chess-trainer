@@ -144,7 +144,12 @@ export function classifyMistake(a: { fenBefore: string; played: string; best: Al
         return { kind: 'missedCapture', phrase: `Можно было забрать ${PIECE[m.captured].acc}${free ? ' бесплатно' : ''}` };
       }
       const prize = m.captured === 'p' ? bestPrize(trade(a.fenBefore, top.pv).taken) : undefined;
-      if (prize) return { kind: 'missedCapture', phrase: `Взятие ${ruSan(m.san)} выигрывало ${PIECE[prize].acc}` };
+      if (prize) {
+        // взятие пешки с вилкой (К:c7+, К:f7) — это пропущенная вилка (правило 7), а не захват
+        const fork = forkPhrase(board, m);
+        if (fork) return { kind: 'missedFork', phrase: fork };
+        return { kind: 'missedCapture', phrase: `Взятие ${ruSan(m.san)} выигрывало ${PIECE[prize].acc}` };
+      }
     }
     // 7. Пропущена вилка
     const fork = m && wins ? forkPhrase(board, m) : null;
