@@ -191,7 +191,7 @@ describe('очередь разбора', () => {
     expect(order.slice(1)).toEqual(rapidIds(20));
   });
 
-  it('разбор старой версии пересчитывается после остальных; задача со сменившимся ходом удалена с повторением', async () => {
+  it('разбор старой версии среди последних партий пересчитывается по порядку от новых; задача со сменившимся ходом удалена с повторением', async () => {
     await putGames([game('old', 500), game('n1', 400), game('n2', 300)]);
     await saveAnalysis(analysis('old', CONFIG.RULES_VERSION - 1), {
       put: [{ id: 'g:old:2', gameId: 'old', ply: 2, endTime: 500, fen: 'rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1',
@@ -203,10 +203,21 @@ describe('очередь разбора', () => {
     const order = trackRuns(queue);
     queue.start();
     await idle(queue, 3);
-    expect(order).toEqual(['n1', 'n2', 'old']);
+    expect(order).toEqual(['old', 'n1', 'n2']);
     expect((await getAnalysis('old'))!.rulesVersion).toBe(CONFIG.RULES_VERSION);
     expect(await getGamePuzzles('old')).toEqual([]);
     expect(await db.reviews.get('g:old:2')).toBeUndefined();
+  });
+
+  it('Л3: самая новая партия промежутка с устаревшим разбором идёт раньше неразобранных', async () => {
+    await putGames([game('a', 500), game('b', 400), game('c', 300)]);
+    await saveAnalysis(analysis('a', CONFIG.RULES_VERSION - 1), { put: [], removeIds: [] });
+    const { queue } = makeQueue(spyEngine().engine);
+    const order = trackRuns(queue);
+    queue.setRange(['a', 'b', 'c']);
+    queue.start();
+    await idle(queue, 3);
+    expect(order).toEqual(['a', 'b', 'c']);
   });
 
   it('скрытие посреди партии отменяет разбор; после возвращения партия разобрана', async () => {

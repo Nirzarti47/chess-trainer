@@ -44,6 +44,11 @@ function trade(fen: string, line: string[]): { given: PieceSymbol[]; taken: Piec
   return { given, taken };
 }
 
+/** Самая дорогая НЕ пешка среди взятых; если взяты одни пешки — undefined. */
+function bestPrize(taken: PieceSymbol[]): PieceSymbol | undefined {
+  return taken.filter((p) => p !== 'p').sort((x, y) => PIECE_VALUE[y] - PIECE_VALUE[x])[0];
+}
+
 /** Вилка после хода m: пришедшая фигура нападает на две фигуры соперника (дороже её или без защиты)
  *  либо даёт шах и нападает на одну такую. Пешки целями не считаются. Фраза или null. */
 function forkPhrase(chess: Chess, m: Move): string | null {
@@ -130,22 +135,23 @@ export function classifyMistake(a: { fenBefore: string; played: string; best: Al
     const board = new Chess(a.fenBefore);
     const m = playUci(board, top.move);
     const wins = swing(a.fenBefore, top.pv, 3) >= CONFIG.MATERIAL_WIN;
-    // 6. Пропущен захват: первым ходом лучшей линии берётся фигура, а не пешка;
-    // сыгранный ход, забравший на том же поле, захват не пропустил
+    // 6. Пропущен захват: первым ходом лучшей линии берётся фигура; если берётся пешка, нужна
+    // фигура, взятая в этих трёх полуходах. Сыгранный ход, забравший на том же поле, захват не пропустил
     const tookSame = played?.captured !== undefined && played.to === m?.to;
-    if (m?.captured && !tookSame && PIECE_VALUE[m.captured] >= CONFIG.MATERIAL_WIN && wins) {
-      const free = see(a.fenBefore, top.move) === PIECE_VALUE[m.captured];
-      return { kind: 'missedCapture', phrase: `Можно было забрать ${PIECE[m.captured].acc}${free ? ' бесплатно' : ''}` };
+    if (m?.captured && !tookSame && wins) {
+      if (PIECE_VALUE[m.captured] >= CONFIG.MATERIAL_WIN) {
+        const free = see(a.fenBefore, top.move) === PIECE_VALUE[m.captured];
+        return { kind: 'missedCapture', phrase: `Можно было забрать ${PIECE[m.captured].acc}${free ? ' бесплатно' : ''}` };
+      }
+      const prize = m.captured === 'p' ? bestPrize(trade(a.fenBefore, top.pv).taken) : undefined;
+      if (prize) return { kind: 'missedCapture', phrase: `Взятие ${ruSan(m.san)} выигрывало ${PIECE[prize].acc}` };
     }
     // 7. Пропущена вилка
     const fork = m && wins ? forkPhrase(board, m) : null;
     if (fork) return { kind: 'missedFork', phrase: fork };
     // 8. Пропущен сильный шах (мат ловит правило 1)
     if (m && board.isCheck() && !board.isCheckmate()) {
-      // самая дорогая фигура, которую забирает сыгравший в трёх полуходах линии
-      const prize = wins
-        ? trade(a.fenBefore, top.pv).taken.sort((x, y) => PIECE_VALUE[y] - PIECE_VALUE[x])[0]
-        : undefined;
+      const prize = wins ? bestPrize(trade(a.fenBefore, top.pv).taken) : undefined;
       return { kind: 'missedCheck', phrase: prize
         ? `Шах ${ruSan(m.san)} выигрывал ${PIECE[prize].acc}`
         : `Шах ${ruSan(m.san)} давал сильную атаку` };

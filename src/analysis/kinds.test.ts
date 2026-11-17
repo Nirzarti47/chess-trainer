@@ -17,6 +17,8 @@ describe('phrases', () => {
   });
   it('у каждого вида есть название и совет', () => {
     expect(KIND_TITLE.pieceEnPrise).toBe('Фигура поставлена под бой');
+    expect(KIND_TITLE.pieceUndefended).toBe('Фигура осталась под боем');
+    expect(KIND_ADVICE.pieceUndefended).toBe('Перед ходом проверь, какие твои фигуры под ударом и чем они защищены.');
     expect(KIND_TITLE.missedCheck).toBe('Пропущен сильный шах');
     expect(KIND_ADVICE.missedCheck).toBe('Перед ходом проверь все шахи — свои и соперника. '
       + 'Шах часто выигрывает фигуру, которая стоит за королём или без защиты.');
@@ -186,14 +188,26 @@ describe('classifyMistake', () => {
       expect(r.phrase).toContain('слон за пешку');
     });
 
-    it('лучший ход берёт пешку, а выигрыш позже в линии — не «пропущенный захват»', () => {
+    it('Л1: слон берёт пешку b5, а потом ферзь забирает ладью — «Взятие С:b5 выигрывало ладью»', () => {
+      const fen = 'r1bqkbnr/2p2ppp/p1np4/1p6/Q3P3/5N2/PPP1BPPP/RNB1K2R w KQkq - 0 7';
+      const r = run(fen, 'h2h3', alt('e2b5', { cp: 400 }, ['e2b5', 'a6b5', 'a4a8']), null, { cp: 0 });
+      expect(r).toEqual({ kind: 'missedCapture', phrase: 'Взятие С:b5 выигрывало ладью' });
+    });
+
+    it('Л1: в трёх полуходах взяты только пешки — не «пропущен захват»', () => {
+      const r = run('4k3/8/8/1p1p4/8/8/8/1R2K3 w - - 0 1', 'e1e2',
+        alt('b1b5', { cp: 200 }, ['b1b5', 'e8e7', 'b5d5']), null, { cp: 0 });
+      expect(r.kind).toBe('other');
+    });
+
+    it('лучший ход берёт пешку, а выигрыш позже в линии — «пропущен захват» по взятой фигуре', () => {
       const fen = '6k1/r7/2p5/8/1N6/8/8/4K3 w - - 0 1';
       const line = ['b4c6', 'g8f8', 'c6a7'];
       const chess = new Chess(fen);
       for (const u of line) chess.move({ from: u.slice(0, 2), to: u.slice(2, 4) });
       expect(chess.history({ verbose: true }).map((m) => m.captured)).toEqual(['p', undefined, 'r']);
       const r = run(fen, 'e1e2', alt('b4c6', { cp: 500 }, line), null, { cp: 0 });
-      expect(r.kind).not.toBe('missedCapture');
+      expect(r).toEqual({ kind: 'missedCapture', phrase: 'Взятие К:c6 выигрывало ладью' });
     });
   });
 
@@ -249,6 +263,12 @@ describe('classifyMistake', () => {
     it('К5: пропущен шах с сильной атакой', () => {
       const r = run(CHECK_ATTACK_FEN, 'g1f3', alt('d1h5', { cp: 1000 }, ['d1h5', 'e8e7', 'c3d5']), null, { cp: 0 });
       expect(r).toEqual({ kind: 'missedCheck', phrase: 'Шах Фh5+ давал сильную атаку' });
+    });
+
+    it('Л2: шах, после которого взяты только пешки, — «давал сильную атаку»', () => {
+      const r = run('6k1/p7/4p3/8/2B5/8/8/R3K3 w - - 0 1', 'e1e2',
+        alt('c4e6', { cp: 300 }, ['c4e6', 'g8h8', 'a1a7']), null, { cp: 0 });
+      expect(r).toEqual({ kind: 'missedCheck', phrase: 'Шах С:e6+ давал сильную атаку' });
     });
 
     it('К5: шах, совпавший с сыгранным ходом, и мат — не «пропущен шах»', () => {

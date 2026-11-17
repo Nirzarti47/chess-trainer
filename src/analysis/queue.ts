@@ -101,7 +101,8 @@ export function createAnalysisQueue(deps: { engine: Pick<AnalysisEngine, 'analys
 
   /** Партии фона по порядку: промежуток → последние AUTO_GAMES → старая версия; одна неудача — в конец. */
   function backgroundOrder(): string[] {
-    const fresh = (id: string) => !versions.has(id);
+    // нужен разбор: нет разбора или он устаревшей версии (новые партии не ждут всех неразобранных)
+    const fresh = (id: string) => (versions.get(id) ?? -1) < CONFIG.RULES_VERSION;
     const inRange = new Set(range);
     const slow = games.filter(isSlow);
     const ids = [
