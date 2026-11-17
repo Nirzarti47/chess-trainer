@@ -120,17 +120,33 @@ describe('PatternsScreen', () => {
     expect(screen.getByTestId('where').textContent).toBe('/games/patterns/train');
   });
 
-  it('новый разбор (рост revision) перечитывает данные', async () => {
+  const rerenderTree = (
+    <MemoryRouter initialEntries={['/games/patterns']}>
+      <Routes><Route path="/games/patterns" element={<PatternsScreen />} /></Routes>
+    </MemoryRouter>
+  );
+
+  it('новый разбор (рост revision) перечитывает данные; setRange получает укороченный список', async () => {
     const { rerender } = renderPatterns();
     await screen.findByText('Партий: 6, разобрано: 2');
+    await waitFor(() => expect(store.setRange).toHaveBeenLastCalledWith(['g2', 'g4', 'g5', 'g6']));
     await save(analysis('g2', ['missedMate']));
     store.state = { ...IDLE, revision: 1 };
-    rerender(
-      <MemoryRouter initialEntries={['/games/patterns']}>
-        <Routes><Route path="/games/patterns" element={<PatternsScreen />} /></Routes>
-      </MemoryRouter>,
-    );
+    rerender(rerenderTree);
     expect(await screen.findByText('Партий: 6, разобрано: 3')).toBeTruthy();
+    expect(store.setRange).toHaveBeenLastCalledWith(['g4', 'g5', 'g6']);
+  });
+
+  it('повторный показ без смены набора неразобранных партий setRange снова не вызывает', async () => {
+    const { rerender } = renderPatterns();
+    await screen.findByText('Партий: 6, разобрано: 2');
+    await waitFor(() => expect(store.setRange).toHaveBeenCalledTimes(1));
+    // Разбор уже разобранной g1 сменился: данные перечитаны, а набор неразобранных тот же.
+    await save(analysis('g1', ['missedMate', 'missedMate', 'missedMate', 'missedMate', 'missedMate']));
+    store.state = { ...IDLE, revision: 1 };
+    rerender(rerenderTree);
+    await waitFor(() => expect(rows()).toContain('Пропущен мат5'));
+    expect(store.setRange).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -145,12 +161,14 @@ describe('PatternsScreen: пустые случаи и сбой', () => {
     expect((screen.getByRole('button', { name: 'Тренировать' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('разобранные партии без ошибок владельца: «Ошибок не найдено»', async () => {
+  it('разобранные партии без ошибок владельца: «Ошибок не найдено»; всё разобрано — setRange([])', async () => {
     await putGames([game('g1', 1)]);
     await save(analysis('g1', []));
     renderPatterns();
     expect(await screen.findByText('Ошибок не найдено')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Тренировать' }) as HTMLButtonElement).disabled).toBe(false);
+    await waitFor(() => expect(store.setRange).toHaveBeenCalledWith([]));
+    expect(store.setRange).toHaveBeenCalledTimes(1);
   });
 
   it('сбой чтения базы: свой текст и «Повторить»', async () => {

@@ -59,8 +59,10 @@ export async function patternLesson(now: Date = new Date()): Promise<Lesson> {
   const games = gamesInRange(allGames, range, now.getTime());
   const kinds = trainKinds(countKinds(games, analyses));
 
-  // Свои: сначала ещё не решённые чисто, внутри — от новых партий к старым и по ходу партии.
-  const gameIds = new Set(games.map((g) => g.id));
+  // Свои — только из партий с разбором нынешней версии правил, как в countKinds.
+  // Сначала ещё не решённые чисто, внутри — от новых партий к старым и по ходу партии.
+  const current = new Set(analyses.filter((a) => a.rulesVersion === CONFIG.RULES_VERSION).map((a) => a.gameId));
+  const gameIds = new Set(games.filter((g) => current.has(g.id)).map((g) => g.id));
   const own = allPuzzles.filter((p) => gameIds.has(p.gameId) && kinds.includes(p.kind))
     .sort((a, b) => Number(clean.has(a.id)) - Number(clean.has(b.id)) || b.endTime - a.endTime || a.ply - b.ply)
     .slice(0, CONFIG.PATTERN_OWN_MAX)

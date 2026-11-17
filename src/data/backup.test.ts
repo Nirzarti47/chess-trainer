@@ -212,6 +212,20 @@ describe('резервная копия версии 2: партии', () => {
     expect(await db.kv.get('patternRange')).toBeUndefined();
   });
 
+  it('файл версии 1 с ником и промежутком в kv, на устройстве их нет — после восстановления их тоже нет', async () => {
+    await fillState();
+    const file = await v1File((kv) => [...kv,
+      { key: 'chessUser', value: { nick: 'rival_two', loadedThrough: null } },
+      { key: 'patternRange', value: { by: 'time', span: 'week' } }]);
+    await db.kv.delete('chessUser');
+    await db.kv.delete('patternRange');
+    await importBackup(JSON.stringify(file));
+    expect(await getChessUser()).toBeNull();
+    expect(await db.kv.get('patternRange')).toBeUndefined();
+    // Прочие строки kv из файла восстановлены.
+    expect((await db.kv.get('profile'))?.value).toBeTruthy();
+  });
+
   it('файл версии 1: ник из самого файла не подменяет ник устройства', async () => {
     await fillState();
     const file = await v1File((kv) => [...kv, { key: 'chessUser', value: { nick: 'rival_two', loadedThrough: null } }]);
@@ -241,6 +255,8 @@ describe('резервная копия версии 2: партии', () => {
     ['задача с числом вместо id', (t: Tables) => { t.gamePuzzles = [{ ...t.gamePuzzles[0], id: 5 }]; }],
     ['задача с тремя ходами', (t: Tables) => { t.gamePuzzles = [{ ...t.gamePuzzles[0], moves: ['a', 'b', 'c'] }]; }],
     ['нет таблицы games', (t: Tables) => { delete t.games; }],
+    ['нет таблицы analyses', (t: Tables) => { delete t.analyses; }],
+    ['нет таблицы gamePuzzles', (t: Tables) => { delete t.gamePuzzles; }],
   ])('версия 2: %s → «Файл повреждён», база не изменилась', async (_name, spoil) => {
     await fillState();
     await fillGames();
@@ -257,4 +273,13 @@ describe('резервная копия версии 2: партии', () => {
     await expect(importBackup('{"app":"chess-trainer","version":3,"tables":{}}'))
       .rejects.toThrow(new BackupError('Файл от другой версии приложения'));
   });
+
+  it.each([['"2"'], ['null']])('нечисловая версия %s → «Файл от другой версии приложения», база не изменилась',
+    async (version) => {
+      await fillState();
+      const before = await snapshot();
+      await expect(importBackup(`{"app":"chess-trainer","version":${version},"tables":{}}`))
+        .rejects.toThrow(new BackupError('Файл от другой версии приложения'));
+      expect(await snapshot()).toEqual(before);
+    });
 });

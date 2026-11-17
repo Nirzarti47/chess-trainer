@@ -313,6 +313,21 @@ describe('повторение', () => {
       await waitFor(async () => expect(await db.reviews.get('g:x:5')).toBeUndefined());
     });
 
+  it('две записи из партий: задача одной есть — показана и запись цела, задачи другой нет — запись удалена', async () => {
+    await db.gamePuzzles.put({ id: 'g:x:5', gameId: 'x', ply: 5, endTime: 100,
+      fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', moves: ['e2e4', 'e7e5'],
+      kind: 'pieceEnPrise', phrase: 'Фигура осталась без защиты', loss: 0.3 });
+    await db.reviews.bulkPut([
+      { puzzleId: 'g:x:5', stage: 0, dueDay: today() },
+      { puzzleId: 'g:y:7', stage: 0, dueDay: today() },
+    ]);
+    renderAt('/run/review');
+    expect(await screen.findByText('Из твоей партии')).toBeTruthy();
+    expect(screen.getByText('1 из 1')).toBeTruthy();
+    await waitFor(async () => expect(await db.reviews.get('g:y:7')).toBeUndefined());
+    expect(await db.reviews.get('g:x:5')).toBeTruthy();
+  });
+
   it('крестик выходит из повторения', async () => {
     await db.reviews.put({ puzzleId: 'c1-pin-3', stage: 1, dueDay: today() });
     renderAt('/run/review');

@@ -6,9 +6,9 @@ export const PIECE_VALUE: Record<'p' | 'n' | 'b' | 'r' | 'q' | 'k', number> =
 /** Порядок «от дешёвой к дорогой»; король — последним, хотя его цена 0. */
 const ORDER = ['p', 'n', 'b', 'r', 'q', 'k'];
 
-/** Делает ход в UCI; null, если ход недопустим. */
-function playUci(chess: Chess, uci: string): Move | null {
-  if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci)) return null;
+/** Делает ход в UCI; null, если хода нет или он недопустим. */
+export function playUci(chess: Chess, uci: string | undefined): Move | null {
+  if (!uci || !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci)) return null;
   try {
     return chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
   } catch {

@@ -1,3 +1,4 @@
+import { Chess } from 'chess.js';
 import type { AltMove, GameAnalysis, GameRecord, MoveReview, Score, SideSummary } from '../../domain/gameTypes';
 import { CONFIG } from '../../analysis/config';
 import { alternatives, badgeText, bestArrowVisible, buildPlyViews, chartPoints, nextUserMistake } from './reviewModel';
@@ -118,5 +119,25 @@ describe('bestArrowVisible', () => {
 
   it('поле «откуда» пусто и до хода — стрелки нет', () => {
     expect(bestArrowVisible(fenAt(0), fenAt(1), 'e5e6')).toBe(false);
+  });
+
+  /** Позиция после хода uci из fen. */
+  const play = (fen: string, uci: string) => {
+    const chess = new Chess(fen);
+    chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4) });
+    return chess.fen();
+  };
+
+  it('рокировка лучшим ходом: сыгран ход другой фигурой — стрелка есть, сыгран ход королём — нет', () => {
+    const before = '4k3/8/8/8/8/8/8/4K2R w K - 0 1';
+    expect(bestArrowVisible(before, play(before, 'h1h4'), 'e1g1')).toBe(true);
+    expect(bestArrowVisible(before, play(before, 'e1f1'), 'e1g1')).toBe(false);
+  });
+
+  it('взятие на проходе лучшим ходом: сыгран ход другой фигурой — стрелка есть', () => {
+    // Чёрные только что сыграли d7d5, лучшим было e5d6 на проходе.
+    const before = '4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 2';
+    expect(new Chess(before).moves({ verbose: true }).some((m) => m.from === 'e5' && m.to === 'd6')).toBe(true);
+    expect(bestArrowVisible(before, play(before, 'e1e2'), 'e5d6')).toBe(true);
   });
 });

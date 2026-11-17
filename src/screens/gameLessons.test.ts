@@ -135,6 +135,15 @@ describe('patternLesson', () => {
     expect(ids((await patternLesson()).tasks)).toEqual(['g:a:2', 'g:a:4', 'g:a:6']);
   });
 
+  it('задачи партии с устаревшим разбором (другая версия правил) в урок не попадают', async () => {
+    await addGame(game('a', now - DAY), ['badTrade', 'badTrade'], [[2, 'badTrade'], [4, 'badTrade']]);
+    // Партия промежутка с задачами, но разбор её старой версии правил.
+    await putGames([game('stale', now - 2 * DAY)]);
+    await saveAnalysis({ ...analysis('stale', ['badTrade']), rulesVersion: CONFIG.RULES_VERSION - 1 },
+      { put: [own('stale', 2, 'badTrade', now - 2 * DAY)], removeIds: [] });
+    expect(ids((await patternLesson()).tasks)).toEqual(['g:a:2', 'g:a:4']);
+  });
+
   it('ничего нет: LessonNotFoundError с текстом для экрана; lessonFactory ведёт узел pattern сюда', async () => {
     expect(PATTERN_NODE).toBe('pattern');
     await expect(patternLesson()).rejects.toMatchObject({

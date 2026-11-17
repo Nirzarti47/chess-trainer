@@ -68,6 +68,12 @@ describe('разборы и задачи из партий', () => {
     expect(await getGamePuzzle(p1.id)).toBeUndefined();
   });
 
+  it('saveAnalysis: задача и в put, и в removeIds остаётся — удаление идёт раньше записи', async () => {
+    const p = puzzle('x', 5);
+    await saveAnalysis(analysis('x'), { put: [p], removeIds: [p.id] });
+    expect(await getGamePuzzle(p.id)).toEqual(p);
+  });
+
   it('getGamePuzzles без аргумента — задачи всех партий, с аргументом — одной', async () => {
     await saveAnalysis(analysis('x'), { put: [puzzle('x', 5)], removeIds: [] });
     await saveAnalysis(analysis('y'), { put: [puzzle('y', 7)], removeIds: [] });
@@ -107,6 +113,16 @@ describe('ник и настройки', () => {
     expect(await db.reviews.get('g:x:5')).toBeUndefined();
     expect(await db.reviews.get('00abc')).toBeDefined();
     expect(await getChessUser()).toEqual({ nick: 'other', loadedThrough: null });
+  });
+
+  it('changeNick не трогает прочие строки kv: профиль и промежуток «Частых ошибок» остаются', async () => {
+    await db.kv.put({ key: 'profile', value: { rating: 750, ratedCount: 3, xp: 40 } });
+    await setPatternRange({ by: 'time', span: 'month' });
+    await setChessUser({ nick: 'Owner_Test', loadedThrough: '2026/10' });
+    await changeNick('other');
+    expect((await db.kv.get('profile'))?.value).toEqual({ rating: 750, ratedCount: 3, xp: 40 });
+    expect(await getPatternRange()).toEqual({ by: 'time', span: 'month' });
+    expect((await db.kv.toArray()).map(r => r.key).sort()).toEqual(['chessUser', 'patternRange', 'profile']);
   });
 
   it('getPatternRange: по умолчанию 20 последних партий; сохранённое читается', async () => {

@@ -113,6 +113,39 @@ describe('useExplore', () => {
     expect(result.current).toMatchObject({ failed: false, score: { cp: 20 } });
   });
 
+  it('back во время счёта второго хода: поздний ответ не меняет глубину 1 (прежние score и best)', async () => {
+    const { engine, calls } = manualEngine();
+    const { result } = renderHook(() => useExplore(engine));
+    act(() => result.current.start(START, 'e2e4'));
+    await act(async () => calls[0].answer([line('e7e5', { cp: 80 })]));
+    act(() => result.current.move('c7c5'));
+    expect(result.current).toMatchObject({ depth: 2, thinking: true });
+    act(() => result.current.back());
+    expect(calls[1].opts.signal!.aborted).toBe(true);
+    await act(async () => calls[1].answer([line('g1f3', { cp: 300 })]));
+    expect(result.current).toMatchObject({ depth: 1, thinking: false, failed: false, score: { cp: -80 } });
+    expect(result.current.best).toEqual({ move: 'e7e5', score: { cp: -80 }, pv: ['e7e5'] });
+  });
+
+  it('exit во время счёта: поздний ответ режим не включает', async () => {
+    const { engine, calls } = manualEngine();
+    const { result } = renderHook(() => useExplore(engine));
+    act(() => result.current.start(START, 'e2e4'));
+    act(() => result.current.exit());
+    await act(async () => calls[0].answer([line('e7e5', { cp: 80 })]));
+    expect(result.current).toMatchObject({ active: false, depth: 0, score: null, best: null });
+  });
+
+  it('ответ null, пришедший после отмены, не ставит failed', async () => {
+    const { engine, calls } = manualEngine();
+    const { result } = renderHook(() => useExplore(engine));
+    act(() => result.current.start(START, 'e2e4'));
+    act(() => result.current.move('e7e5'));
+    // Отменённый первый запрос отвечает null (так analyse сообщает об отмене).
+    await act(async () => calls[0].answer(null));
+    expect(result.current).toMatchObject({ depth: 2, thinking: true, failed: false });
+  });
+
   it('недопустимый ход ничего не меняет', () => {
     const engine = tableEngine({});
     const { result } = renderHook(() => useExplore(engine));

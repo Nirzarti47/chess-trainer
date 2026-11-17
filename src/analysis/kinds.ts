@@ -1,7 +1,7 @@
 import { Chess, type Move, type PieceSymbol } from 'chess.js';
 import type { AltMove, MistakeKind, Score, Side } from '../domain/gameTypes';
 import { CONFIG } from './config';
-import { PIECE_VALUE, see, swing } from './material';
+import { PIECE_VALUE, playUci, see, swing } from './material';
 import { OTHER_PHRASE } from './phrases';
 
 type Result = { kind: MistakeKind; phrase: string };
@@ -22,16 +22,6 @@ const TWO: Record<PieceSymbol, string> = {
 
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 const ending = (p: PieceSymbol, fem: string, masc: string) => (PIECE[p].fem ? fem : masc);
-
-/** Делает ход в UCI; null, если ход недопустим. */
-function playUci(chess: Chess, uci: string | undefined): Move | null {
-  if (!uci || !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci)) return null;
-  try {
-    return chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
-  } catch {
-    return null;
-  }
-}
 
 /** Число ходов до мата в пользу side, если мат не дольше MATE_KIND_MAX; иначе null. */
 function mateFor(score: Score | undefined, side: Side): number | null {
