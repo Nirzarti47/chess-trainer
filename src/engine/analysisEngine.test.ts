@@ -350,3 +350,63 @@ describe('analyse: сбои', () => {
     await expect(engine.analyse(START, SCREEN)).resolves.toBeNull();
   });
 });
+
+describe('analyse: запуск движка и время на ответ', () => {
+  /** Медленный телефон: на isready и go воркер сам не отвечает, готовность и ответ шлёт тест. */
+  const slow = () => setup(() => cmd => (cmd === 'uci' ? ['uciok'] : []));
+
+  it('долгий запуск не съедает время на ответ: timeoutMs считается от go', async () => {
+    vi.useFakeTimers();
+    const { engine, workers } = slow();
+    const r = track(engine.analyse(START, { ...SCREEN, timeoutMs: 20000 }));
+    // Запуск 14 с (в пределе 15 с), ответ через 10 с после go: всего 24 с — больше timeoutMs.
+    await vi.advanceTimersByTimeAsync(14000);
+    workers[0].emit('readyok');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(goCount(workers[0])).toBe(1);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(r.done).toBe(false);
+    workers[0].emit('info depth 5 multipv 1 score cp 12 pv e2e4');
+    workers[0].emit('bestmove e2e4');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(r).toEqual({ done: true, value: [{ move: 'e2e4', score: { cp: 12 }, pv: ['e2e4'] }] });
+  });
+
+  it('запуск не закончился за 15 с: запрос завершён без результата, go не отправлен, воркер заменён', async () => {
+    vi.useFakeTimers();
+    const { engine, workers } = slow();
+    const r = track(engine.analyse(START, SCREEN));
+    await vi.advanceTimersByTimeAsync(14999);
+    expect(r.done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(r).toEqual({ done: true, value: null });
+    expect(goCount(workers[0])).toBe(0);
+    expect(workers[0].terminated).toBe(true);
+  });
+
+  it('три неудачных запуска подряд уводят движок в паузу, как три опоздания', async () => {
+    vi.useFakeTimers();
+    const { engine, factory } = slow();
+    for (let i = 0; i < 3; i++) {
+      const r = track(engine.analyse(START, SCREEN));
+      await vi.advanceTimersByTimeAsync(15000);
+      expect(r).toEqual({ done: true, value: null });
+    }
+    expect(factory).toHaveBeenCalledTimes(3);
+    expect(await engine.analyse(START, SCREEN)).toBeNull();
+    expect(factory).toHaveBeenCalledTimes(3);
+  });
+
+  it('go отправлен, ответа нет timeoutMs — опоздание, как раньше', async () => {
+    vi.useFakeTimers();
+    const { engine, workers } = slow();
+    const r = track(engine.analyse(START, SCREEN));
+    await vi.advanceTimersByTimeAsync(5000);
+    workers[0].emit('readyok');
+    await vi.advanceTimersByTimeAsync(19999);
+    expect(r.done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(r).toEqual({ done: true, value: null });
+    expect(workers[0].terminated).toBe(true);
+  });
+});

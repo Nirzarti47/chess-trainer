@@ -9,13 +9,16 @@ export type UciScore = { cp: number } | { mate: number };
 export interface EngineLine { move: string; score: UciScore; pv: string[] }
 export type AnalysisPriority = 'screen' | 'background';
 export interface AnalyseOptions { nodes: number; multipv: 1 | 2 | 3; priority: AnalysisPriority;
-  timeoutMs?: number /* по умолчанию 20000 */; signal?: AbortSignal }
+  timeoutMs?: number /* по умолчанию 20000, считается от отправки go */; signal?: AbortSignal }
 export interface AnalysisEngine {
-  /** Линии последней завершённой глубины, сильнейшая первой. null — сбой, таймаут, отмена. Никогда не отклоняется. */
+  /** Линии последней завершённой глубины, сильнейшая первой. null — сбой, таймаут, отмена. Никогда не отклоняется.
+   *  Для позиции без ходов (мат, пат) — пустой список; такие позиции движку не отдаются. */
   analyse(fen: string, opts: AnalyseOptions): Promise<EngineLine[] | null>;
 }
 
 const DEFAULT_TIMEOUT_MS = 20000;
+/** Сколько ждать готовности нового воркера (загрузка и подготовка движка): на телефоне это секунды. */
+const STARTUP_TIMEOUT_MS = 15000;
 /** Сколько ждать bestmove после stop, прежде чем заменить воркер. */
 const STOP_GRACE_MS = 1000;
 /** После стольких неудач подряд движок берёт паузу. */
@@ -105,7 +108,10 @@ export function createAnalysisEngine(workerFactory: () => Worker): AnalysisEngin
         return;
       }
       worker = w;
+      // Запуск, не уложившийся в предел, — сбой: воркер заменяется, запрос получает null, как при опоздании.
+      const limit = setTimeout(() => discard(w), STARTUP_TIMEOUT_MS);
       const done = (ok: boolean) => {
+        clearTimeout(limit);
         startLine = null;
         startFailed = null;
         resolve(ok);
@@ -180,11 +186,6 @@ export function createAnalysisEngine(workerFactory: () => Worker): AnalysisEngin
     if (!req) return;
     const run: Run = { req, phase: 'starting', depths: new Map() };
     current = run;
-    run.timer = setTimeout(() => {
-      if (current !== run || !run.req) return;
-      if (worker) discard(worker);
-      if (current === run && run.req) failRun(run);
-    }, req.timeoutMs);
     void ensureReady().then(ok => {
       if (current !== run || !run.req) return;
       if (!ok || !worker) {
@@ -194,6 +195,12 @@ export function createAnalysisEngine(workerFactory: () => Worker): AnalysisEngin
       const w = worker;
       run.worker = w;
       run.phase = 'searching';
+      // Время на ответ — с отправки go: запуск движка ограничен своим пределом (STARTUP_TIMEOUT_MS).
+      run.timer = setTimeout(() => {
+        if (current !== run || !run.req) return;
+        if (worker) discard(worker);
+        if (current === run && run.req) failRun(run);
+      }, req.timeoutMs);
       post(w, `setoption name MultiPV value ${req.multipv}`);
       post(w, `position fen ${req.fen}`);
       post(w, `go nodes ${req.nodes}`);
