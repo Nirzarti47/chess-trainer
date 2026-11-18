@@ -103,4 +103,16 @@ describe('loadOpeningBook', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(bookLength(['e2e4', 'e7e5'], a)).toBe(2);
   });
+
+  it('сбой не запоминается: следующий вызов снова пробует fetch', async () => {
+    const file = JSON.parse(openingsRaw);
+    const fetchMock = vi.fn().mockRejectedValueOnce(new Error('нет сети'))
+      .mockResolvedValue({ ok: true, json: async () => file });
+    vi.stubGlobal('fetch', fetchMock);
+    const failed = await loadOpeningBook();
+    expect(failed.has(positionKey(new Chess().fen()))).toBe(false);
+    const book = await loadOpeningBook();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(bookLength(['e2e4', 'e7e5'], book)).toBe(2);
+  });
 });

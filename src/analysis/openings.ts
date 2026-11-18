@@ -61,16 +61,24 @@ export function resetOpeningBookCache(): void {
   cached = null;
 }
 
-/** Книга из файла public/openings.json; грузится один раз и запоминается; при сбое — пустая книга (без исключения). */
+async function fetchBook(): Promise<OpeningBook | null> {
+  try {
+    const response = await fetch(`${import.meta.env.BASE_URL}openings.json`);
+    if (!response.ok) return null;
+    return parseOpeningsFile(await response.json());
+  } catch {
+    return null;
+  }
+}
+
+/** Книга из файла public/openings.json; удачная загрузка запоминается, сбой — нет (следующий вызов пробует снова); при сбое — пустая книга, без исключения. */
 export function loadOpeningBook(): Promise<OpeningBook> {
-  cached ??= (async () => {
-    try {
-      const response = await fetch(`${import.meta.env.BASE_URL}openings.json`);
-      if (!response.ok) return EMPTY_BOOK;
-      return parseOpeningsFile(await response.json());
-    } catch {
-      return EMPTY_BOOK;
-    }
-  })();
-  return cached;
+  if (cached) return cached;
+  const attempt: Promise<OpeningBook> = fetchBook().then((book) => {
+    if (book) return book;
+    if (cached === attempt) cached = null;
+    return EMPTY_BOOK;
+  });
+  cached = attempt;
+  return attempt;
 }
