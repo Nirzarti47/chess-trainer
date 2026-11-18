@@ -4,6 +4,7 @@ export const CONFIG = {
   FAST_NODES: 60_000, FAST_MULTIPV: 2,
   DEEP_NODES: 300_000, DEEP_MULTIPV: 3, DEEP_TRIGGER_LOSS: 0.08, DEEP_MAX_MOVES: 20,
   EXPLORE_NODES: 300_000,
+  EXCELLENT_MAX: 0.02, MISS_SHARE: 0.5, MISS_SLACK: 0.05,  // «Отлично»; «Упущенная возможность»: доля подарка и допуск
   GOOD_MAX: 0.05, INACCURACY_MAX: 0.10, MISTAKE_MAX: 0.20,
   ALT_MAX_LOSS: 0.05,            // варианты «Лучше было»: уступают лучшему меньше этого
   GREAT_GAP: 0.10, BRILLIANT_MAX_LOSS: 0.02, BRILLIANT_MAX_BEFORE: 0.90,

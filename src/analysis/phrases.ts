@@ -1,4 +1,5 @@
 import type { Grade, Mark, MistakeKind } from '../domain/gameTypes';
+import type { Category } from './report';
 import type { ThemeId } from '../domain/types';
 
 export const GRADE_TITLE: Record<Grade, string> = {
@@ -48,4 +49,11 @@ export const THEMES_OF_KIND: Record<MistakeKind, ThemeId[]> = {
   badTrade: [],
   missedCheck: ['skewer', 'doubleCheck'],
   other: [],
+};
+
+/** Названия десяти видов оценки хода в сводке партии. */
+export const CATEGORY_TITLE: Record<Category, string> = {
+  brilliant: 'Блестящий ход', great: 'Замечательный', best: 'Лучший', excellent: 'Отлично', good: 'Хорошо',
+  book: 'Теоретический ход', inaccuracy: 'Неточность', mistake: 'Ошибка', miss: 'Упущенная возможность',
+  blunder: 'Зевок',
 };
