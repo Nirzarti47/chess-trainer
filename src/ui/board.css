@@ -29,7 +29,7 @@
 }
 
 .board cg-board square.hi-bad {
-  background: color-mix(in srgb, var(--grade-blunder) 55%, transparent);
+  background: color-mix(in srgb, var(--cat-blunder) 55%, transparent);
 }
 
 .board cg-board square.selected {
@@ -110,28 +110,18 @@
 /* left и top — угол поля; отступ сдвигает значок в правый верхний угол (проценты от ширины доски). */
 .board-badge {
   position: absolute;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  margin: -7px 0 0 calc(12.5% - 15px);
-  border: 2px solid var(--bg, #16222c);
+  display: block;
+  width: 26px;
+  height: 26px;
+  margin: -8px 0 0 calc(12.5% - 18px);
   border-radius: 50%;
-  background: var(--tone, var(--muted));
-  color: #fff;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.5px;
+  box-shadow: 0 0 0 2px var(--bg, #16222c);
+  line-height: 0;
 }
 
-.board-badge--brilliant { --tone: var(--grade-brilliant); }
-.board-badge--great { --tone: var(--grade-great); }
-.board-badge--best { --tone: var(--grade-best); }
-.board-badge--good { --tone: var(--grade-good); }
-.board-badge--inaccuracy { --tone: var(--grade-inaccuracy); color: var(--bg); }
-.board-badge--mistake { --tone: var(--grade-mistake); }
-.board-badge--blunder { --tone: var(--grade-blunder); }
+.board-badge svg {
+  display: block;
+}
 
 /* Выбор фигуры при превращении пешки */
 .board-promotion {

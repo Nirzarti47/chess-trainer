@@ -7,15 +7,6 @@
   --success: #63c29a;
   --weak: #5aa9d6;
 
-  /* Тона оценок хода в разборе: плашка карточки, значок на доске, точки графика */
-  --grade-brilliant: #5aa9d6;
-  --grade-great: #5aa9d6;
-  --grade-best: #63c29a;
-  --grade-good: #63c29a;
-  --grade-inaccuracy: var(--accent);
-  --grade-mistake: #e8873a;
-  --grade-blunder: #e25c4c;
-
   /* Цвета десяти видов хода в сводке партии (значки CategoryIcon и числа строк) */
   --cat-brilliant: #26c2a3;
   --cat-great: #5c8bb0;

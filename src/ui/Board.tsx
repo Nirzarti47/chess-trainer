@@ -3,9 +3,10 @@ import { Chessground } from 'chessground';
 import type { Api } from 'chessground/api';
 import type { DrawBrushes, DrawShape } from 'chessground/draw';
 import type { Color, Key } from 'chessground/types';
-import type { Grade, Mark } from '../domain/gameTypes';
+import type { Category } from '../analysis/report';
 import 'chessground/assets/chessground.base.css';
 import { pieceUrl } from '../content/pieceSets';
+import { CategoryIcon } from './CategoryIcon';
 import { useSettings } from './settings';
 import './board.css';
 
@@ -21,8 +22,8 @@ export interface BoardProps {
   arrows?: BoardArrow[];
   /** 'bad' — сыгранный ход подсвечен красноватым (ошибка в разборе). */
   lastMoveTone?: 'normal' | 'bad';
-  /** Значок оценки хода в углу поля. */
-  badge?: { square: string; text: string; tone: Grade | Mark };
+  /** Значок вида хода в углу поля. */
+  badge?: { square: string; category: Category };
   interactive: boolean;
   /** Превращение пешки сразу в ферзя, без окна выбора. */
   autoQueen?: boolean;
@@ -196,12 +197,8 @@ export function Board({
       <div ref={elRef} className="board-cg" />
       {badge && (
         <div className="board-layer">
-          <span
-            className={`board-badge board-badge--${badge.tone}`}
-            data-square={badge.square}
-            style={squarePosition(badge.square, orientation)}
-          >
-            {badge.text}
+          <span className="board-badge" data-square={badge.square} style={squarePosition(badge.square, orientation)}>
+            <CategoryIcon category={badge.category} size={26} />
           </span>
         </div>
       )}

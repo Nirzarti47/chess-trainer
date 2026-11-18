@@ -131,6 +131,9 @@
 }
 
 .move-card-grade {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 2px 8px;
   border-radius: 8px;
   color: #16222c;

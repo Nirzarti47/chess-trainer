@@ -1,34 +1,39 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { MoveReview, Side } from '../../domain/gameTypes';
+import type { Category } from '../../analysis/report';
+import type { Side } from '../../domain/gameTypes';
 import { GameChart } from './GameChart';
-
-const review = (ply: number, over: Partial<MoveReview> = {}): MoveReview =>
-  ({ ply, move: 'e2e4', loss: 0, grade: 'good', best: [], deep: false, ...over });
 
 const points = Array.from({ length: 9 }, () => 0.5);
 const WIDTH = 400;
 
-function chart(reviews: MoveReview[], userColor: Side = 'white', onSelect = vi.fn(), current = 3) {
-  const view = render(<GameChart points={points} reviews={reviews} userColor={userColor} current={current} onSelect={onSelect} />);
+function chart(categories: Category[], userColor: Side = 'white', onSelect = vi.fn(), current = 3) {
+  const view = render(<GameChart points={points} categories={categories} userColor={userColor} current={current} onSelect={onSelect} />);
   return { ...view, onSelect };
 }
 const dots = () => Array.from(document.querySelectorAll<HTMLElement>('.game-chart-dot'));
 
 describe('GameChart: точки', () => {
-  it('только на ходах владельца и только для заметных оценок', () => {
+  it('только на ходах владельца и только для заметных видов', () => {
     chart([
-      review(0, { grade: 'mistake' }), // ход владельца: точка
-      review(1, { grade: 'blunder' }), // ход соперника: точки нет
-      review(2, { grade: 'good', mark: 'great' }), // владелец, отметка: точка
-      review(4, { grade: 'good' }), // владелец, обычный ход: точки нет
-      review(6, { grade: 'best', mark: 'brilliant' }), // владелец: точка
-      review(3, { grade: 'inaccuracy' }), // соперник и не заметная
+      'mistake', // ход 0, владелец: точка
+      'blunder', // ход 1, соперник: точки нет
+      'great', // ход 2, владелец: точка
+      'miss', // ход 3, соперник
+      'excellent', // ход 4, владелец, обычный ход: точки нет
+      'good', // ход 5
+      'brilliant', // ход 6, владелец: точка
+      'blunder', // ход 7, соперник
     ]);
     expect(dots().map((d) => d.style.left)).toEqual(['12.5%', '37.5%', '87.5%']);
   });
 
+  it('упущенная возможность владельца — точка цветом вида, отличный ход — без точки', () => {
+    chart(['miss', 'good', 'excellent']);
+    expect(dots().map((d) => [d.style.left, d.style.background])).toEqual([['12.5%', 'var(--cat-miss)']]);
+  });
+
   it('владелец чёрными — точки на его ходах', () => {
-    chart([review(0, { grade: 'blunder' }), review(1, { grade: 'blunder' }), review(5, { grade: 'mistake' })], 'black');
+    chart(['blunder', 'blunder', 'good', 'good', 'good', 'mistake'], 'black');
     expect(dots().map((d) => d.style.left)).toEqual(['25%', '75%']);
   });
 });

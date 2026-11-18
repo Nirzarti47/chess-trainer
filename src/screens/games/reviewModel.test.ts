@@ -1,7 +1,8 @@
 import { Chess } from 'chess.js';
 import type { AltMove, GameAnalysis, GameRecord, MoveReview, Score, SideSummary } from '../../domain/gameTypes';
 import { CONFIG } from '../../analysis/config';
-import { alternatives, badgeText, bestArrowVisible, buildPlyViews, chartPoints, nextUserMistake } from './reviewModel';
+import type { Category } from '../../analysis/report';
+import { alternatives, bestArrowVisible, buildPlyViews, chartPoints, nextUserMistake } from './reviewModel';
 
 // Детский мат: 1. e4 e5 2. Фh5 Кc6 3. Сc4 Кf6 4. Ф:f7#
 const MOVES = ['e2e4', 'e7e5', 'd1h5', 'b8c6', 'f1c4', 'g8f6', 'h5f7'];
@@ -26,14 +27,21 @@ const analysis = (moves: MoveReview[], scores: Score[] = MOVES.map(() => ({ cp: 
 const cpFor = (e: number) => Math.round(Math.log(e / (1 - e)) / 0.00368208);
 const alt = (move: string, whiteExpected: number): AltMove => ({ move, score: { cp: cpFor(whiteExpected) }, pv: [move] });
 
+const CATS: Category[] = ['book', 'book', 'mistake', 'good', 'miss', 'blunder', 'brilliant'];
+
 describe('buildPlyViews', () => {
-  const views = buildPlyViews(game, analysis(MOVES.map((_, i) => rv(i))));
+  const views = buildPlyViews(game, analysis(MOVES.map((_, i) => rv(i))), CATS);
 
   it('позиция на каждый полуход и начальная', () => {
     expect(views).toHaveLength(8);
     expect(views[0].review).toBeNull();
     expect(views[0].lastMove).toBeNull();
     expect(views[0].label).toBeNull();
+  });
+
+  it('вид хода: в начальной позиции null, дальше по порядку ходов', () => {
+    expect(views[0].category).toBeNull();
+    views.slice(1).forEach((v, i) => expect(v.category).toBe(CATS[i]));
   });
 
   it('запись хода по-русски и сыгранный ход', () => {
@@ -62,10 +70,8 @@ describe('alternatives', () => {
 });
 
 describe('nextUserMistake', () => {
-  const a = analysis([
-    rv(0), rv(1, { grade: 'blunder' }), rv(2, { grade: 'mistake' }), rv(3, { grade: 'mistake' }),
-    rv(4, { grade: 'inaccuracy' }), rv(5), rv(6, { grade: 'blunder' }),
-  ]);
+  // Виды ходов 0..6; белые ходят на чётных.
+  const a: Category[] = ['best', 'blunder', 'mistake', 'mistake', 'inaccuracy', 'good', 'blunder'];
 
   it('пропускает ошибки соперника и возвращает позицию после ошибки владельца', () => {
     expect(nextUserMistake(a, 'white', 0)).toBe(3);
@@ -78,6 +84,13 @@ describe('nextUserMistake', () => {
     expect(nextUserMistake(a, 'white', 7)).toBeNull();
     expect(nextUserMistake(a, 'black', 4)).toBeNull();
   });
+
+  it('упущенная возможность владельца тоже ошибка; хороший и теоретический ходы — нет', () => {
+    const b: Category[] = ['book', 'miss', 'good', 'excellent', 'miss', 'best', 'brilliant'];
+    expect(nextUserMistake(b, 'white', 0)).toBe(5);
+    expect(nextUserMistake(b, 'white', 5)).toBeNull();
+    expect(nextUserMistake(b, 'black', 0)).toBe(2);
+  });
 });
 
 describe('chartPoints', () => {
@@ -86,20 +99,8 @@ describe('chartPoints', () => {
   });
 });
 
-describe('badgeText', () => {
-  it('значок по знаку и оценке', () => {
-    expect(badgeText(rv(0, { mark: 'brilliant' }))).toBe('!!');
-    expect(badgeText(rv(0, { mark: 'great' }))).toBe('!');
-    expect(badgeText(rv(0, { grade: 'inaccuracy' }))).toBe('?!');
-    expect(badgeText(rv(0, { grade: 'mistake' }))).toBe('?');
-    expect(badgeText(rv(0, { grade: 'blunder' }))).toBe('??');
-    expect(badgeText(rv(0, { grade: 'best' }))).toBeNull();
-    expect(badgeText(rv(0, { grade: 'good' }))).toBeNull();
-  });
-});
-
 describe('bestArrowVisible', () => {
-  const fenAt = (n: number) => buildPlyViews(game, analysis([]))[n].fen;
+  const fenAt = (n: number) => buildPlyViews(game, analysis([]), [])[n].fen;
 
   it('та же фигура ушла с поля «откуда» — стрелки нет', () => {
     // 2. Фh5 сыграно, лучше было Фg4: ферзь с d1 уже ушёл.

@@ -222,20 +222,19 @@ describe('Board: оформление', () => {
 describe('Board: разбор партии', () => {
   const AFTER_E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
 
-  it('badge рисует значок с текстом на нужном поле', () => {
+  it('badge рисует значок вида хода на нужном поле', () => {
     const { rerender } = render(
       <Board fen={START} orientation="white" dests={new Map()} lastMove={null} interactive={false} onMove={() => {}}
-        badge={{ square: 'f7', text: '??', tone: 'blunder' }} />,
+        badge={{ square: 'f7', category: 'excellent' }} />,
     );
     const badge = document.querySelector<HTMLElement>('.board-badge')!;
-    expect(badge.textContent).toBe('??');
+    expect(badge.querySelector('[role="img"]')!.getAttribute('aria-label')).toBe('Отлично');
     expect(badge.dataset.square).toBe('f7');
-    expect(badge.classList).toContain('board-badge--blunder');
     // Поле f7 при белых снизу: шестой столбец, вторая строка сверху.
     expect([badge.style.left, badge.style.top]).toEqual(['62.5%', '12.5%']);
     rerender(
       <Board fen={START} orientation="black" dests={new Map()} lastMove={null} interactive={false} onMove={() => {}}
-        badge={{ square: 'f7', text: '??', tone: 'blunder' }} />,
+        badge={{ square: 'f7', category: 'excellent' }} />,
     );
     const turned = document.querySelector<HTMLElement>('.board-badge')!;
     expect([turned.style.left, turned.style.top]).toEqual(['25%', '75%']);

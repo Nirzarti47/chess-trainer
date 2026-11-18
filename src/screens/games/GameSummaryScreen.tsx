@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { loadOpeningBook, bookLength } from '../../analysis/openings';
+import { loadBookPlies } from '../../analysis/openings';
 import { CATEGORY_TITLE, KIND_ADVICE, KIND_TITLE } from '../../analysis/phrases';
 import { CATEGORY_ORDER, reportOf, type GameReport } from '../../analysis/report';
 import { getCurrentAnalysis, getGame, getGamePuzzles } from '../../data/gamesRepo';
@@ -82,8 +82,7 @@ export function GameSummaryScreen() {
       }
       const puzzleCount = (await getGamePuzzles(gameId)).length;
       // Книга дебютов грузится один раз за сеанс; при сбое она пустая — теоретических ходов тогда нет.
-      const book = await loadOpeningBook();
-      const report = reportOf(analysis, bookLength(game.moves, book));
+      const report = reportOf(analysis, await loadBookPlies(game.moves));
       if (alive) setPhase({ kind: 'ready', game, analysis, report, puzzleCount });
     })().catch((e: unknown) => {
       console.error('Не удалось открыть партию', e);

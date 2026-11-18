@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { loadBookPlies } from '../../analysis/openings';
+import { categorize, type Category } from '../../analysis/report';
 import { formatScore } from '../../analysis/score';
 import { getCurrentAnalysis, getGame } from '../../data/gamesRepo';
 import type { GameAnalysis, GameRecord, Score } from '../../domain/gameTypes';
@@ -13,7 +15,7 @@ import { GameChart } from './GameChart';
 import { RESULT } from './GamesScreen';
 import { MoveCard, ruMove } from './MoveCard';
 import {
-  alternatives, badgeText, bestArrowVisible, buildPlyViews, chartPoints, moverOf, nextUserMistake, type PlyView,
+  alternatives, BAD_CATEGORIES, bestArrowVisible, buildPlyViews, chartPoints, moverOf, nextUserMistake, type PlyView,
 } from './reviewModel';
 import { useExplore, type ExploreState } from './useExplore';
 import './ReviewScreen.css';
@@ -22,7 +24,8 @@ type Phase =
   | { kind: 'loading' }
   | { kind: 'notFound' }
   | { kind: 'dbError'; text: string }
-  | { kind: 'ready'; game: GameRecord; analysis: GameAnalysis };
+  /** bookPlies — сколько первых полуходов партии теоретические (для видов ходов). */
+  | { kind: 'ready'; game: GameRecord; analysis: GameAnalysis; bookPlies: number };
 
 type Engine = Pick<AnalysisEngine, 'analyse'>;
 
@@ -40,15 +43,14 @@ const arrow = (uci: string, tone: 'best' | 'alt'): BoardArrow => ({ from: uci.sl
 /** Оформление доски для позиции после хода: подсветка хода, значок, стрелка лучшего хода (если она не из пустого поля). */
 function boardDecor(view: PlyView, beforeFen: string | null): Decor {
   const r = view.review;
-  if (!r) return { lastMove: null, lastMoveTone: 'normal', badge: undefined, arrows: [] };
+  if (!r || !view.category) return { lastMove: null, lastMoveTone: 'normal', badge: undefined, arrows: [] };
   const arrows: BoardArrow[] = [];
   const best = r.best[0]?.move;
   if (best && best !== r.move && beforeFen && bestArrowVisible(beforeFen, view.fen, best)) arrows.push(arrow(best, 'best'));
-  const text = badgeText(r);
   return {
     lastMove: view.lastMove,
-    lastMoveTone: r.grade === 'mistake' || r.grade === 'blunder' ? 'bad' : 'normal',
-    badge: text && view.lastMove ? { square: view.lastMove[1], text, tone: r.mark ?? r.grade } : undefined,
+    lastMoveTone: BAD_CATEGORIES.has(view.category) ? 'bad' : 'normal',
+    badge: view.lastMove ? { square: view.lastMove[1], category: view.category } : undefined,
     arrows,
   };
 }
@@ -102,7 +104,11 @@ export function ReviewScreen({ engine = analysisEngine }: { engine?: Engine }) {
       if (!alive) return;
       // Разбора нет или он устарел: сводка сама запустит разбор.
       if (!analysis) navigate(`/games/${gameId}${plyQuery}`, { replace: true });
-      else setPhase({ kind: 'ready', game, analysis });
+      else {
+        // Книга дебютов грузится один раз за сеанс; при сбое она пустая — теоретических ходов тогда нет.
+        const bookPlies = await loadBookPlies(game.moves);
+        if (alive) setPhase({ kind: 'ready', game, analysis, bookPlies });
+      }
     })().catch((e: unknown) => {
       console.error('Не удалось открыть разбор', e);
       if (alive) setPhase({ kind: 'dbError', text: describeError(e) });
@@ -131,24 +137,28 @@ export function ReviewScreen({ engine = analysisEngine }: { engine?: Engine }) {
     );
   }
 
-  return <Review key={phase.game.id} game={phase.game} analysis={phase.analysis} engine={engine} />;
+  return <Review key={phase.game.id} game={phase.game} analysis={phase.analysis} bookPlies={phase.bookPlies} engine={engine} />;
 }
 
-/** Позиции партии; null — данные испорчены (недопустимый ход или число оценок не сходится с числом ходов). */
-function safeViews(game: GameRecord, analysis: GameAnalysis): PlyView[] | null {
+interface Prepared { views: PlyView[]; categories: Category[] }
+
+/** Позиции партии и виды ходов; null — данные испорчены (недопустимый ход, число оценок не сходится с числом ходов,
+ *  оценки не читаются). */
+function prepare(game: GameRecord, analysis: GameAnalysis, bookPlies: number): Prepared | null {
   if (analysis.scores.length !== game.moves.length + 1) return null;
   try {
-    return buildPlyViews(game, analysis);
+    const categories = categorize(analysis, bookPlies);
+    return { views: buildPlyViews(game, analysis, categories), categories };
   } catch (e) {
     console.error('Не удалось построить позиции партии', e);
     return null;
   }
 }
 
-function Review({ game, analysis, engine }: { game: GameRecord; analysis: GameAnalysis; engine: Engine }) {
+function Review({ game, analysis, bookPlies, engine }: { game: GameRecord; analysis: GameAnalysis; bookPlies: number; engine: Engine }) {
   const navigate = useNavigate();
-  const views = useMemo(() => safeViews(game, analysis), [game, analysis]);
-  if (!views) {
+  const prepared = useMemo(() => prepare(game, analysis, bookPlies), [game, analysis, bookPlies]);
+  if (!prepared) {
     return (
       <section className="review review--message">
         <h1>Не удалось показать разбор этой партии</h1>
@@ -156,12 +166,12 @@ function Review({ game, analysis, engine }: { game: GameRecord; analysis: GameAn
       </section>
     );
   }
-  return <ReviewBody game={game} analysis={analysis} views={views} engine={engine} />;
+  return <ReviewBody game={game} analysis={analysis} views={prepared.views} categories={prepared.categories} engine={engine} />;
 }
 
-interface ReviewBodyProps { game: GameRecord; analysis: GameAnalysis; views: PlyView[]; engine: Engine }
+interface ReviewBodyProps { game: GameRecord; analysis: GameAnalysis; views: PlyView[]; categories: Category[]; engine: Engine }
 
-function ReviewBody({ game, analysis, views, engine }: ReviewBodyProps) {
+function ReviewBody({ game, analysis, views, categories, engine }: ReviewBodyProps) {
   const [params] = useSearchParams();
   const points = useMemo(() => chartPoints(analysis), [analysis]);
   // Текущая позиция — единственное состояние перемотки; адрес при перемотке не меняется.
@@ -185,7 +195,7 @@ function ReviewBody({ game, analysis, views, engine }: ReviewBodyProps) {
   const beforeView = index > 0 ? views[index - 1] : null;
   // Показ варианта: позиция до хода с одной стрелкой.
   const variant = !explore.active && alt !== null && beforeView !== null ? { alt, before: beforeView } : null;
-  const nextMistake = nextUserMistake(analysis, game.userColor, index);
+  const nextMistake = nextUserMistake(categories, game.userColor, index);
   const fen = explore.active ? explore.fen : variant ? variant.before.fen : view.fen;
   const dests = useMemo(() => legalDests(fen), [fen]);
   const onMove = (uci: string) => {
@@ -242,7 +252,7 @@ function ReviewBody({ game, analysis, views, engine }: ReviewBodyProps) {
           onChoose={setChosen}
         />
       )}
-      <GameChart points={points} reviews={analysis.moves} userColor={game.userColor} current={index} onSelect={go} />
+      <GameChart points={points} categories={categories} userColor={game.userColor} current={index} onSelect={go} />
       {explore.active ? (
         <div className="review-actions">
           <BigButton variant="surface" onClick={explore.back}>Шаг назад</BigButton>

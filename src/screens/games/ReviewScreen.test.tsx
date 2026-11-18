@@ -120,7 +120,7 @@ describe('ReviewScreen', () => {
     await screen.findByText('Начало партии');
     fireEvent.click(screen.getByRole('button', { name: 'Следующий ход' }));
     expect(within(card()).getByText('1. e4')).toBeTruthy();
-    expect(within(card()).getByText('Лучший ход')).toBeTruthy();
+    expect(within(card()).getByText('Лучший')).toBeTruthy();
     expect(board.props!.lastMove).toEqual(['e2', 'e4']);
     expect(board.props!.lastMoveTone).toBe('normal');
   });
@@ -139,7 +139,7 @@ describe('ReviewScreen', () => {
     expect(within(c).getByRole('button', { name: /Кc3/ })).toBeTruthy();
     expect(within(c).queryByRole('button', { name: /d4/ })).toBeNull();
     expect(board.props!.lastMoveTone).toBe('bad');
-    expect(board.props!.badge).toEqual({ square: 'h5', text: '?', tone: 'mistake' });
+    expect(board.props!.badge).toEqual({ square: 'h5', category: 'mistake' });
     expect(board.props!.arrows).toEqual([{ from: 'g1', to: 'f3', tone: 'best' }]);
     // Других ошибок владельца нет.
     expect(screen.getByRole('button', { name: 'Следующая ошибка' })).toHaveProperty('disabled', true);
@@ -186,9 +186,9 @@ describe('ReviewScreen', () => {
     renderReview('/games/g1/review?ply=5');
     const c = await screen.findByTestId('move-card');
     expect(within(c).getByText('3… Кf6')).toBeTruthy();
-    expect(within(c).getByText('Грубая ошибка')).toBeTruthy();
+    expect(within(c).getByText('Зевок')).toBeTruthy();
     expect(within(c).getByText('Теперь белые ставят мат')).toBeTruthy();
-    expect(board.props!.badge).toEqual({ square: 'f6', text: '??', tone: 'blunder' });
+    expect(board.props!.badge).toEqual({ square: 'f6', category: 'blunder' });
   });
 
   it('сыгран лучший ход и вариант один — блока «Лучше было» нет', async () => {
@@ -262,7 +262,7 @@ describe('ReviewScreen: свой вариант', () => {
     expect(within(card()).getByRole('button', { name: /Кc3/ }).getAttribute('aria-pressed')).toBe('false');
     expect(board.props!.fen).toBe(fenAfter(3));
     expect(board.props!.lastMove).toEqual(['d1', 'h5']);
-    expect(board.props!.badge).toEqual({ square: 'h5', text: '?', tone: 'mistake' });
+    expect(board.props!.badge).toEqual({ square: 'h5', category: 'mistake' });
     expect(board.props!.arrows).toEqual([{ from: 'g1', to: 'f3', tone: 'best' }]);
     expect(evalText()).toBe(formatScore(SCORES[3]));
     expect(screen.getByRole('button', { name: 'Следующий ход' })).toBeTruthy();
@@ -331,6 +331,58 @@ describe('ReviewScreen: свой вариант', () => {
   });
 });
 
+describe('ReviewScreen: виды ходов', () => {
+  // Соперник зевает (ход 1), владелец отвечает ошибкой, но не опускается ниже прежнего (ход 2) — упущенная возможность.
+  const missed = analysis({
+    moves: analysis().moves.map((m) => (m.ply === 1 ? { ...m, grade: 'blunder' as const, loss: 0.3 } : m)),
+  });
+  beforeEach(async () => {
+    await putGames([game()]);
+    await saveAnalysis(missed, { put: [], removeIds: [] });
+  });
+
+  it('упущенная возможность: плашка с названием вида и значок того же вида на доске', async () => {
+    renderReview('/games/g1/review?ply=2');
+    const c = await screen.findByTestId('move-card');
+    const tag = within(c).getByText('Упущенная возможность');
+    expect(tag.style.background).toBe('var(--cat-miss)');
+    expect(within(c).getByRole('img', { name: 'Упущенная возможность' })).toBeTruthy();
+    expect(board.props!.badge).toEqual({ square: 'h5', category: 'miss' });
+    expect(board.props!.lastMoveTone).toBe('bad');
+  });
+
+  it('ход соперника: «Зевок» в плашке и значок на доске, подсветка плохого хода', async () => {
+    renderReview('/games/g1/review?ply=1');
+    const c = await screen.findByTestId('move-card');
+    expect(within(c).getByText('Зевок')).toBeTruthy();
+    expect(board.props!.badge).toEqual({ square: 'e5', category: 'blunder' });
+    expect(board.props!.lastMoveTone).toBe('bad');
+  });
+
+  it('значок есть и у хорошего хода: все виды, не только ошибки', async () => {
+    renderReview('/games/g1/review?ply=0');
+    await screen.findByText('1. e4');
+    expect(board.props!.badge).toEqual({ square: 'e4', category: 'best' });
+    expect(board.props!.lastMoveTone).toBe('normal');
+  });
+
+  it('«Следующая ошибка» останавливается на упущенной возможности владельца, минуя зевок соперника', async () => {
+    renderReview();
+    await screen.findByText('Начало партии');
+    fireEvent.click(screen.getByRole('button', { name: 'Следующая ошибка' }));
+    expect(within(card()).getByText('2. Фh5')).toBeTruthy();
+    expect(within(card()).getByText('Упущенная возможность')).toBeTruthy();
+  });
+
+  it('сбой при подсчёте видов (битая оценка) — тот же текст про испорченный разбор', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const scores = SCORES.map((s, i) => (i === 3 ? (null as unknown as Score) : s));
+    await saveAnalysis(analysis({ scores, moves: missed.moves }), { put: [], removeIds: [] });
+    renderReview();
+    expect(await screen.findByText('Не удалось показать разбор этой партии')).toBeTruthy();
+  });
+});
+
 describe('ReviewScreen: вариант на доске', () => {
   // Лучший ход Фg4 — той же фигурой, что сыграна (Фh5); вторым вариантом идёт сыгранный Фh5.
   const same = analysis({
@@ -346,7 +398,7 @@ describe('ReviewScreen: вариант на доске', () => {
     await screen.findByRole('button', { name: /Фg4/ });
     expect(board.props!.fen).toBe(fenAfter(3));
     expect(board.props!.arrows).toEqual([]);
-    expect(board.props!.badge).toEqual({ square: 'h5', text: '?', tone: 'mistake' });
+    expect(board.props!.badge).toEqual({ square: 'h5', category: 'mistake' });
   });
 
   it('вариант: доска до хода, одна стрелка alt, без значка и подсветки; повторное нажатие снимает выбор', async () => {
@@ -363,7 +415,7 @@ describe('ReviewScreen: вариант на доске', () => {
     fireEvent.click(button);
     expect(button.getAttribute('aria-pressed')).toBe('false');
     expect(board.props!.fen).toBe(fenAfter(3));
-    expect(board.props!.badge).toEqual({ square: 'h5', text: '?', tone: 'mistake' });
+    expect(board.props!.badge).toEqual({ square: 'h5', category: 'mistake' });
     expect(board.props!.lastMove).toEqual(['d1', 'h5']);
     expect(board.props!.arrows).toEqual([]);
   });

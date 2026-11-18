@@ -1,12 +1,6 @@
-import type { Grade, Mark, MistakeKind } from '../domain/gameTypes';
+import type { MistakeKind } from '../domain/gameTypes';
 import type { Category } from './report';
 import type { ThemeId } from '../domain/types';
-
-export const GRADE_TITLE: Record<Grade, string> = {
-  best: 'Лучший ход', good: 'Хороший ход', inaccuracy: 'Неточность', mistake: 'Ошибка', blunder: 'Грубая ошибка',
-};
-
-export const MARK_TITLE: Record<Mark, string> = { brilliant: 'Блестящий ход', great: 'Сильный ход' };
 
 /** Фраза к ошибке, у которой вид не определён. */
 export const OTHER_PHRASE = 'Лучше было сыграть так';

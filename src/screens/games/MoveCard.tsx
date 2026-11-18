@@ -1,8 +1,9 @@
 import { Chess } from 'chess.js';
 import { ruSan } from '../../analysis/notation';
-import { GRADE_TITLE, MARK_TITLE } from '../../analysis/phrases';
+import { CATEGORY_TITLE } from '../../analysis/phrases';
 import { formatScore } from '../../analysis/score';
 import type { AltMove } from '../../domain/gameTypes';
+import { CategoryIcon } from '../../ui/CategoryIcon';
 import type { PlyView } from './reviewModel';
 
 /** Ход в UCI из позиции fen → русская запись. */
@@ -23,24 +24,26 @@ interface MoveCardProps {
   onChoose(index: number | null): void;
 }
 
-/** Карточка хода: оценка словом и цветом, запись хода, фраза, «Лучше было». */
+/** Карточка хода: вид хода значком, словом и цветом, запись хода, фраза, «Лучше было». */
 export function MoveCard({ view, beforeFen, alts, chosen, onChoose }: MoveCardProps) {
   const r = view.review;
-  if (!r || !beforeFen) {
+  const category = view.category;
+  if (!r || !beforeFen || !category) {
     return (
       <div className="move-card" data-testid="move-card">
         <p className="move-card-start">Начало партии</p>
       </div>
     );
   }
-  const tone = r.mark ?? r.grade;
-  const title = r.mark ? MARK_TITLE[r.mark] : GRADE_TITLE[r.grade];
   // Сыгран лучший ход и других хороших нет — показывать нечего.
   const showAlts = alts.length > 0 && !(alts.length === 1 && alts[0].move === r.move);
   return (
     <div className="move-card" data-testid="move-card">
       <p className="move-card-head">
-        <span className="move-card-grade" style={{ background: `var(--grade-${tone})` }}>{title}</span>
+        <span className="move-card-grade" style={{ background: `var(--cat-${category})` }}>
+          <CategoryIcon category={category} size={18} />
+          {CATEGORY_TITLE[category]}
+        </span>
         <b className="move-card-move">{view.label}</b>
       </p>
       {r.phrase && <p className="move-card-phrase">{r.phrase}</p>}

@@ -1,20 +1,22 @@
 import { useRef, type PointerEvent } from 'react';
-import type { MoveReview, Side } from '../../domain/gameTypes';
+import type { Category } from '../../analysis/report';
+import type { Side } from '../../domain/gameTypes';
 import { moverOf } from './reviewModel';
 
 interface GameChartProps {
   /** Доля белых 0..1 для каждой позиции (chartPoints). */
   points: number[];
-  reviews: MoveReview[];
+  /** Вид каждого хода: categories[i] — для хода i. */
+  categories: Category[];
   userColor: Side;
   current: number;
   onSelect(index: number): void;
 }
 
-const MARKED = new Set(['mistake', 'blunder', 'brilliant', 'great']);
+const MARKED: ReadonlySet<Category> = new Set<Category>(['mistake', 'miss', 'blunder', 'great', 'brilliant']);
 
 /** График партии по цветам: верх — белые, низ — чёрные. Нажатие и ведение пальцем переносят на ближайшую позицию. */
-export function GameChart({ points, reviews, userColor, current, onSelect }: GameChartProps) {
+export function GameChart({ points, categories, userColor, current, onSelect }: GameChartProps) {
   const ref = useRef<HTMLDivElement>(null);
   const last = Math.max(1, points.length - 1);
   const x = (i: number) => (i / last) * 100;
@@ -29,10 +31,9 @@ export function GameChart({ points, reviews, userColor, current, onSelect }: Gam
     if (index !== current && index < points.length) onSelect(index);
   };
 
-  const dots = reviews.flatMap((r) => {
-    const tone = r.mark ?? r.grade;
-    if (moverOf(r.ply) !== userColor || !MARKED.has(tone) || r.ply + 1 >= points.length) return [];
-    return [{ index: r.ply + 1, tone }];
+  const dots = categories.flatMap((category, ply) => {
+    if (moverOf(ply) !== userColor || !MARKED.has(category) || ply + 1 >= points.length) return [];
+    return [{ index: ply + 1, category }];
   });
 
   return (
@@ -67,7 +68,7 @@ export function GameChart({ points, reviews, userColor, current, onSelect }: Gam
         <i
           key={d.index}
           className="game-chart-dot"
-          style={{ left: `${x(d.index)}%`, top: `${y(points[d.index])}%`, background: `var(--grade-${d.tone})` }}
+          style={{ left: `${x(d.index)}%`, top: `${y(points[d.index])}%`, background: `var(--cat-${d.category})` }}
         />
       ))}
     </div>

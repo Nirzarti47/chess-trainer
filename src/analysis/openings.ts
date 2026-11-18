@@ -82,3 +82,8 @@ export function loadOpeningBook(): Promise<OpeningBook> {
   cached = attempt;
   return attempt;
 }
+
+/** Сколько первых полуходов партии теоретические: книга грузится (при сбое пустая — таких ходов тогда нет). */
+export async function loadBookPlies(moves: string[]): Promise<number> {
+  return bookLength(moves, await loadOpeningBook());
+}
