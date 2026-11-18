@@ -13,5 +13,6 @@ export const CONFIG = {
   LINE_PLIES: 3,                 // сколько полуходов линии смотреть, считая выигрыш материала
   PIECE_MIN_VALUE: 3,            // «фигура», а не пешка: цена от 3
   PUZZLE_MAX: 8, UNIQUE_MARGIN: 0.15, PUZZLE_MIN_BEST: 0.35,
+  ACC_WINDOW_MIN: 2, ACC_WINDOW_MAX: 8, ACC_WEIGHT_MIN: 0.5, ACC_WEIGHT_MAX: 12, ACC_LOSS_SCALE: 1,  // точность партии, как у Lichess
   AUTO_GAMES: 20, PATTERN_SIZE: 10, PATTERN_OWN_MAX: 6, FEW_GAMES: 3, FEW_MISTAKES: 10,
 } as const;

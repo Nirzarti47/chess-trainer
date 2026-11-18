@@ -86,7 +86,7 @@ describe('reportOf', () => {
     const sum = (c: Record<Category, number>) => Object.values(c).reduce((x, y) => x + y, 0);
     expect(sum(r.white.counts)).toBe(3);
     expect(sum(r.black.counts)).toBe(2);
-    expect(r.white.accuracy).toBeNull();
+    expect(r.white.accuracy).toBe(100);
   });
   it('без знаков и deep: false сумма тоже сходится', () => {
     const a = analysis(Array.from({ length: 7 }, (_, i) => ({ loss: i * 0.04 })));

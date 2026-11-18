@@ -1,4 +1,5 @@
 import type { GameAnalysis, Side } from '../domain/gameTypes';
+import { gameAccuracy } from './accuracy';
 import { CONFIG } from './config';
 import { expected } from './score';
 
@@ -45,11 +46,13 @@ export interface GameReport { categories: Category[]; white: SideReport; black: 
 const emptyCounts = (): Record<Category, number> =>
   Object.fromEntries(CATEGORY_ORDER.map((c) => [c, 0])) as Record<Category, number>;
 
-/** Счёт видов по сторонам. Точность пока null: её подставит задача 2. */
+/** Счёт видов и точность по сторонам. */
 export function reportOf(a: GameAnalysis, bookPlies: number): GameReport {
   const categories = categorize(a, bookPlies);
   const white: SideReport = { counts: emptyCounts(), accuracy: null };
   const black: SideReport = { counts: emptyCounts(), accuracy: null };
   categories.forEach((c, i) => (moverOf(a.moves[i].ply) === 'white' ? white : black).counts[c]++);
+  white.accuracy = gameAccuracy(a.scores, 'white');
+  black.accuracy = gameAccuracy(a.scores, 'black');
   return { categories, white, black };
 }
