@@ -1,5 +1,14 @@
-/* Сводка партии */
+/* Сводка партии: свои цвета, как в «Отчёте о партии» Chess.com; другие экраны не затронуты */
 .summary {
+  --sum-bg: #302e2b;
+  --sum-row: #262421;
+  --sum-text: #fff;
+  --sum-muted: #a7a6a2;
+  --muted: var(--sum-muted);
+  --surface: var(--sum-row);
+  --bg: var(--sum-bg);
+  background: var(--sum-bg);
+  color: var(--sum-text);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -39,52 +48,81 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--surface);
-  color: var(--text);
+  background: var(--sum-row);
+  color: var(--sum-text);
   font-size: 24px;
   line-height: 1;
   text-decoration: none;
 }
 
-.summary-table {
-  width: 100%;
-  border-collapse: collapse;
-  border-radius: 14px;
-  background: var(--surface);
+/* Столбцы: название | белые | значок | чёрные; те же столбцы у имён и у плашек точности */
+.summary-names,
+.summary-accuracy-row,
+.summary-row {
+  display: grid;
+  grid-template-columns: 1fr 76px 30px 76px;
+  align-items: center;
+}
+
+.summary-names { margin-bottom: -6px; }
+
+.summary-name {
   overflow: hidden;
-}
-
-.summary-table th,
-.summary-table td {
-  padding: 9px 12px;
-  font-size: 14.5px;
-  text-align: right;
-}
-
-.summary-table th[scope='row'],
-.summary-table thead th:first-child {
-  text-align: left;
-  font-weight: 400;
-  color: var(--muted);
-}
-
-.summary-table thead th {
-  max-width: 110px;
-  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 700;
 }
 
-.summary-table tbody tr:last-child { font-weight: 700; }
+.summary-name:nth-child(1) { grid-column: 2; }
+.summary-name:nth-child(2) { grid-column: 4; }
+
+.summary-row-title {
+  font-size: 15px;
+  color: var(--sum-text);
+}
+
+.summary-accuracy-row .summary-row-title { font-weight: 600; }
+
+.summary-accuracy {
+  padding: 5px 0;
+  border-radius: 6px;
+  font-size: 20px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.summary-accuracy--white { grid-column: 2; background: #fff; color: #262421; }
+.summary-accuracy--black { grid-column: 4; background: #403d39; color: #fff; }
+
+.summary-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 10px 0 0;
+  border-top: 1px solid #403d39;
+  list-style: none;
+}
+
+.summary-row { min-height: 38px; }
+.summary-row > svg { display: block; }
+
+.summary-row-num {
+  font-size: 20px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--row-color);
+}
 
 .summary-advice {
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 12px 14px;
-  border-radius: 14px;
-  background: var(--surface);
+  border-radius: 10px;
+  background: var(--sum-row);
 }
 
 .summary-advice ul {
@@ -121,3 +159,21 @@
 
 /* Полоса разбора не растёт на весь экран: у общего .progress-bar стоит flex: 1 */
 .summary .progress-bar { flex: none; }
+
+/* Кнопки: зелёная главная с тёмно-зелёной кромкой и тёмная вторичная */
+.summary .big-button { font-weight: 800; font-size: 17px; }
+
+.summary .big-button--accent {
+  --big-button-bg: #81b64c;
+  --big-button-text: #fff;
+  --big-button-shade: #45753c;
+}
+
+.summary .big-button--surface {
+  --big-button-bg: #403d39;
+  --big-button-text: #fff;
+  --big-button-shade: #1f1d1b;
+}
+
+.summary .progress-bar { background: #403d39; }
+.summary .progress-bar i { background: var(--cat-best); }

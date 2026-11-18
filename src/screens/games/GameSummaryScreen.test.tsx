@@ -1,7 +1,11 @@
 import 'fake-indexeddb/auto';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import openingsRaw from '../../../public/openings.json?raw';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { CONFIG } from '../../analysis/config';
+import { resetOpeningBookCache } from '../../analysis/openings';
+import { CATEGORY_TITLE } from '../../analysis/phrases';
+import { CATEGORY_ORDER, reportOf } from '../../analysis/report';
 import { db } from '../../data/db';
 import { putGames, saveAnalysis } from '../../data/gamesRepo';
 import type { GameAnalysis, GamePuzzle, GameRecord, Grade, MistakeKind, MoveReview, SideSummary } from '../../domain/gameTypes';
@@ -9,6 +13,13 @@ import type { GamesState } from '../../games/gamesStore';
 import { GameSummaryScreen } from './GameSummaryScreen';
 
 // Состояние и очередь подменяются; база настоящая. status() очереди отдаёт то же состояние, что и экран.
+// Подмена reportOf нужна одному тесту: показать точность, которую настоящий разбор не даёт.
+const reportSpy = vi.hoisted(() => ({ override: null as unknown }));
+vi.mock('../../analysis/report', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../analysis/report')>();
+  return { ...actual, reportOf: (...a: Parameters<typeof actual.reportOf>) => reportSpy.override ?? actual.reportOf(...a) };
+});
+
 const store = vi.hoisted(() => ({ state: null as unknown, open: vi.fn() }));
 vi.mock('../../games/gamesStore', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../games/gamesStore')>()),
@@ -68,8 +79,18 @@ function renderSummary(id = 'g1') {
 const running = (gameId: string, done: number, total: number): GamesState =>
   ({ ...IDLE, queue: { ...IDLE.queue, running: { gameId, done, total } } });
 
-const cells = (label: string) =>
-  within(screen.getByText(label).closest('tr') as HTMLElement).getAllByRole('cell').map((c) => c.textContent);
+/** Строка сводки по названию: [название, число левого столбца, число правого]; значок посередине не в счёт. */
+const rowOf = (label: string) =>
+  [...(screen.getByText(label).closest('.summary-row') as HTMLElement).children]
+    .filter((c) => c.tagName.toLowerCase() !== 'svg').map((c) => c.textContent);
+
+const titles = () => [...document.querySelectorAll('.summary-row .summary-row-title')].map((c) => c.textContent);
+
+/** Ход с заданной потерей: 0 — «Лучший», 0.03 — «Хорошо», 0.3 — «Зевок» (не «Упущенная»: соперник до этого не ошибался). */
+const mv = (ply: number, loss: number, grade: Grade): MoveReview =>
+  ({ ply, move: 'e2e4', loss, grade, best: [], deep: false });
+const flat = (n: number) => Array.from({ length: n + 1 }, () => ({ cp: 0 }));
+const withScores = (a: GameAnalysis): GameAnalysis => ({ ...a, scores: flat(a.moves.length) });
 
 beforeEach(async () => {
   await db.delete();
@@ -77,27 +98,108 @@ beforeEach(async () => {
   store.state = IDLE;
   store.open.mockReset();
   store.open.mockReturnValue(new Promise(() => {}));
+  reportSpy.override = null;
+  resetOpeningBookCache();
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('нет сети')));
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  resetOpeningBookCache();
 });
 
 describe('GameSummaryScreen', () => {
-  it('таблица берёт числа по цвету владельца (чёрными — из black), точность целым процентом', async () => {
-    await putGames([game('g1', { userColor: 'black' })]);
-    await saveAnalysis(analysis('g1',
-      side({ grades: grades({ mistake: 1 }), accuracy: 50 }),
-      side({ grades: grades({ mistake: 4 }), accuracy: 87.4 })), { put: [], removeIds: [] });
-    renderSummary();
-    expect(await screen.findByText('Ты — rival_one')).toBeTruthy();
-    expect(cells('Ошибки')).toEqual(['4', '1']);
-    expect(cells('Точность')).toEqual(['87%', '50%']);
-  });
-
-  it('«Блестящие» и «Сильные» скрыты, если у обеих сторон ноль', async () => {
+  it('десять строк в порядке CATEGORY_ORDER, в том числе с нулями; числа по столбцам — из reportOf', async () => {
     await putGames([game('g1')]);
-    await saveAnalysis(analysis('g1', side(), side({ great: 2 })), { put: [], removeIds: [] });
+    const a = withScores(analysis('g1', side(), side(), [
+      mv(0, 0, 'best'), mv(1, 0, 'best'), mv(2, 0.03, 'good'), mv(3, 0.3, 'blunder'), mv(4, 0, 'best'),
+    ]));
+    await saveAnalysis(a, { put: [], removeIds: [] });
     renderSummary();
     await screen.findByText('Точность');
-    expect(screen.queryByText('Блестящие')).toBeNull();
-    expect(cells('Сильные')).toEqual(['0', '2']);
+    expect(titles()).toEqual(CATEGORY_ORDER.map((c) => CATEGORY_TITLE[c]));
+    const report = reportOf(a, 0);
+    for (const c of CATEGORY_ORDER) {
+      expect(rowOf(CATEGORY_TITLE[c])).toEqual([CATEGORY_TITLE[c], String(report.white.counts[c]), String(report.black.counts[c])]);
+    }
+    expect(rowOf('Лучший')).toEqual(['Лучший', '2', '1']);
+    expect(rowOf('Хорошо')).toEqual(['Хорошо', '1', '0']);
+    expect(rowOf('Зевок')).toEqual(['Зевок', '0', '1']);
+    expect(rowOf('Блестящий ход')).toEqual(['Блестящий ход', '0', '0']);
+    expect(screen.getAllByRole('img').map((i) => i.getAttribute('aria-label')))
+      .toEqual(CATEGORY_ORDER.map((c) => CATEGORY_TITLE[c]));
+  });
+
+  it('владелец чёрными: «Ты» над правым столбцом, его числа справа', async () => {
+    await putGames([game('g1', { userColor: 'black' })]);
+    await saveAnalysis(withScores(analysis('g1', side(), side(), [mv(0, 0, 'best'), mv(1, 0.3, 'blunder')])),
+      { put: [], removeIds: [] });
+    renderSummary();
+    expect(await screen.findByText('Ты — rival_one')).toBeTruthy();
+    const names = [...document.querySelectorAll('.summary-name')].map((n) => n.textContent);
+    expect(names).toEqual(['rival_one', 'Ты']);
+    expect(rowOf('Зевок')).toEqual(['Зевок', '0', '1']);
+    expect(rowOf('Лучший')).toEqual(['Лучший', '1', '0']);
+  });
+
+  it('владелец белыми: «Ты» над левым столбцом', async () => {
+    await putGames([game('g1')]);
+    await saveAnalysis(analysis('g1', side(), side()), { put: [], removeIds: [] });
+    renderSummary();
+    await screen.findByText('Точность');
+    expect([...document.querySelectorAll('.summary-name')].map((n) => n.textContent)).toEqual(['Ты', 'rival_one']);
+  });
+
+  it('точность: 64.83 показана как 64.8; сторона без ходов — «—»', async () => {
+    await putGames([game('g1')]);
+    await saveAnalysis(analysis('g1', side(), side()), { put: [], removeIds: [] });
+    const zero = () => Object.fromEntries(CATEGORY_ORDER.map((c) => [c, 0]));
+    reportSpy.override = {
+      categories: [],
+      white: { counts: zero(), accuracy: 64.83 },
+      black: { counts: zero(), accuracy: null },
+    };
+    renderSummary();
+    await screen.findByText('Точность');
+    expect([...document.querySelectorAll('.summary-accuracy')].map((n) => n.textContent)).toEqual(['64.8', '—']);
+  });
+
+  it('партия без ходов: у обеих сторон «—»', async () => {
+    await putGames([game('g1')]);
+    await saveAnalysis(analysis('g1', side(), side()), { put: [], removeIds: [] });
+    renderSummary();
+    await screen.findByText('Точность');
+    expect([...document.querySelectorAll('.summary-accuracy')].map((n) => n.textContent)).toEqual(['—', '—']);
+  });
+
+  it('книга не загрузилась: сводка показана, «Теоретический ход» 0', async () => {
+    await putGames([game('g1', { moves: ['e2e4', 'e7e5'] })]);
+    await saveAnalysis(withScores(analysis('g1', side(), side(), [mv(0, 0, 'best'), mv(1, 0, 'best')])),
+      { put: [], removeIds: [] });
+    renderSummary();
+    await screen.findByText('Точность');
+    expect(rowOf('Теоретический ход')).toEqual(['Теоретический ход', '0', '0']);
+    expect(rowOf('Лучший')).toEqual(['Лучший', '1', '1']);
+  });
+
+  it('книга загрузилась: начальные ходы партии — «Теоретический ход»', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => JSON.parse(openingsRaw) }));
+    await putGames([game('g1', { moves: ['e2e4', 'e7e5'] })]);
+    await saveAnalysis(withScores(analysis('g1', side(), side(), [mv(0, 0, 'best'), mv(1, 0, 'best')])),
+      { put: [], removeIds: [] });
+    renderSummary();
+    await screen.findByText('Точность');
+    expect(rowOf('Теоретический ход')).toEqual(['Теоретический ход', '1', '1']);
+    expect(rowOf('Лучший')).toEqual(['Лучший', '0', '0']);
+  });
+
+  it('старых строк («Лучшие», «Грубые ошибки») нет', async () => {
+    await putGames([game('g1')]);
+    await saveAnalysis(analysis('g1', side(), side()), { put: [], removeIds: [] });
+    renderSummary();
+    await screen.findByText('Точность');
+    expect(screen.queryByText('Грубые ошибки')).toBeNull();
+    expect(screen.queryByText('Лучшие')).toBeNull();
   });
 
   it('совет называет самый частый вид владельца; «other» и ходы соперника не считаются', async () => {
@@ -105,7 +207,7 @@ describe('GameSummaryScreen', () => {
     // ply чётный — ход белых (владелец), нечётный — чёрных.
     const moves = [review(0, 'badTrade'), review(2, 'missedFork'), review(4, 'missedFork'), review(1, 'other'),
       review(3, 'missedMate'), review(5, 'missedMate'), review(6, 'other')];
-    await saveAnalysis(analysis('g1', side(), side(), moves), { put: [], removeIds: [] });
+    await saveAnalysis(withScores(analysis('g1', side(), side(), moves)), { put: [], removeIds: [] });
     renderSummary();
     expect(await screen.findByText(/2 раза: Пропущена вилка\./)).toBeTruthy();
     expect(screen.getByText(/1 раз: Невыгодный размен\./)).toBeTruthy();
@@ -115,7 +217,7 @@ describe('GameSummaryScreen', () => {
   it('при равенстве счёта порядок — как виды впервые встретились; больше двух не показывается', async () => {
     await putGames([game('g1')]);
     const moves = [review(0, 'missedCapture'), review(2, 'badTrade'), review(4, 'missedFork')];
-    await saveAnalysis(analysis('g1', side(), side(), moves), { put: [], removeIds: [] });
+    await saveAnalysis(withScores(analysis('g1', side(), side(), moves)), { put: [], removeIds: [] });
     renderSummary();
     await screen.findByText(/1 раз: Пропущен захват\./);
     expect(screen.getByText(/1 раз: Невыгодный размен\./)).toBeTruthy();
@@ -145,7 +247,7 @@ describe('GameSummaryScreen', () => {
 
   it('Л6: на кнопке число задач', async () => {
     await putGames([game('g1')]);
-    await saveAnalysis(analysis('g1', side({ grades: grades({ mistake: 2 }) }), side()),
+    await saveAnalysis(analysis('g1', side(), side()),
       { put: [puzzle('g1', 3), puzzle('g1', 7)], removeIds: [] });
     renderSummary();
     expect(await screen.findByRole('button', { name: 'Исправить ошибки (2)' })).toBeTruthy();
@@ -154,24 +256,24 @@ describe('GameSummaryScreen', () => {
 
   it('Л6: ошибки есть, а задач нет — вместо кнопки пояснение; без ошибок пояснения нет', async () => {
     await putGames([game('g1')]);
-    await saveAnalysis(analysis('g1', side({ grades: grades({ blunder: 1 }) }), side()), { put: [], removeIds: [] });
+    await saveAnalysis(withScores(analysis('g1', side(), side(), [mv(0, 0.3, 'blunder')])), { put: [], removeIds: [] });
     const first = renderSummary();
     expect(await screen.findByText(
       'Задач из этой партии нет: ни в одной ошибке не нашлось одного ясно лучшего хода')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Исправить ошибки/ })).toBeNull();
     first.unmount();
-    await saveAnalysis(analysis('g1', side({ grades: grades({ best: 5 }) }), side({ grades: grades({ mistake: 3 }) })),
+    await saveAnalysis(withScores(analysis('g1', side(), side(), [mv(0, 0, 'best'), mv(1, 0.3, 'blunder')])),
       { put: [], removeIds: [] });
     renderSummary();
     await screen.findByRole('button', { name: 'Смотреть разбор' });
     expect(screen.queryByText(/Задач из этой партии нет/)).toBeNull();
   });
 
-  it('Л7: пока партия разбирается — только шапка, полоса и подпись, без таблицы и пустого блока', async () => {
+  it('Л7: пока партия разбирается — только шапка, полоса и подпись, без строк сводки и пустого блока', async () => {
     await putGames([game('g1')]);
     const { container } = renderSummary();
     await screen.findByText('Разбираю партию…');
-    expect(container.querySelector('table')).toBeNull();
+    expect(container.querySelector('.summary-rows')).toBeNull();
     const section = container.querySelector('section.summary') as HTMLElement;
     expect([...section.children].map((c) => c.tagName + (c.className ? '.' + c.className : ''))).toEqual(
       ['HEADER.summary-head', 'DIV.progress-bar', 'P.summary-note']);
@@ -250,7 +352,8 @@ describe('GameSummaryScreen', () => {
     await putGames([game('g1')]);
     store.open.mockResolvedValueOnce(analysis('g1', side({ accuracy: 90 }), side()));
     renderSummary();
-    expect(await screen.findByText('90%')).toBeTruthy();
+    expect(await screen.findByText('Точность')).toBeTruthy();
+    expect(titles()).toHaveLength(10);
   });
 
   it('неизвестная партия: «Партия не найдена» и «К партиям»', async () => {

@@ -16,6 +16,18 @@
   --grade-mistake: #e8873a;
   --grade-blunder: #e25c4c;
 
+  /* Цвета десяти видов хода в сводке партии (значки CategoryIcon и числа строк) */
+  --cat-brilliant: #26c2a3;
+  --cat-great: #5c8bb0;
+  --cat-best: #81b64c;
+  --cat-excellent: #96bc4b;
+  --cat-good: #96af8b;
+  --cat-book: #a88865;
+  --cat-inaccuracy: #f7c045;
+  --cat-mistake: #ffa459;
+  --cat-miss: #ff7769;
+  --cat-blunder: #fa412d;
+
   /* Производные оттенки из макета mockups/boards.html */
   --tabbar-bg: #111b23;
   --tab-idle: #6f8794;

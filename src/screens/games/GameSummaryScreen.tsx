@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { KIND_ADVICE, KIND_TITLE } from '../../analysis/phrases';
+import { loadOpeningBook, bookLength } from '../../analysis/openings';
+import { CATEGORY_TITLE, KIND_ADVICE, KIND_TITLE } from '../../analysis/phrases';
+import { CATEGORY_ORDER, reportOf, type GameReport } from '../../analysis/report';
 import { getCurrentAnalysis, getGame, getGamePuzzles } from '../../data/gamesRepo';
 import type { GameAnalysis, GameRecord, MistakeKind } from '../../domain/gameTypes';
 import { gamesQueue, useGamesState } from '../../games/gamesStore';
 import { BigButton } from '../../ui/BigButton';
+import { CategoryIcon } from '../../ui/CategoryIcon';
 import { ProgressBar } from '../../ui/ProgressBar';
 import { describeError } from '../lessonErrors';
 import { formatDate, RESULT } from './GamesScreen';
@@ -17,10 +20,13 @@ type Phase =
   | { kind: 'running'; game: GameRecord }
   /** text — сбой разбора, запомненный в момент ответа open. */
   | { kind: 'failed'; game: GameRecord; text: string }
-  | { kind: 'ready'; game: GameRecord; analysis: GameAnalysis; puzzleCount: number };
+  | { kind: 'ready'; game: GameRecord; analysis: GameAnalysis; report: GameReport; puzzleCount: number };
 
 /** Когда очередь не назвала причину сбоя. */
 const FAILED_FALLBACK = 'Попробуй ещё раз чуть позже';
+
+/** Точность с одним знаком после запятой; у стороны без ходов — «—». */
+const formatAccuracy = (a: number | null): string => (a === null ? '—' : a.toFixed(1));
 
 /** «1 раз», «2 раза», «5 раз». */
 function times(n: number): string {
@@ -75,7 +81,10 @@ export function GameSummaryScreen() {
         }
       }
       const puzzleCount = (await getGamePuzzles(gameId)).length;
-      if (alive) setPhase({ kind: 'ready', game, analysis, puzzleCount });
+      // Книга дебютов грузится один раз за сеанс; при сбое она пустая — теоретических ходов тогда нет.
+      const book = await loadOpeningBook();
+      const report = reportOf(analysis, bookLength(game.moves, book));
+      if (alive) setPhase({ kind: 'ready', game, analysis, report, puzzleCount });
     })().catch((e: unknown) => {
       console.error('Не удалось открыть партию', e);
       if (alive) setPhase({ kind: 'dbError', text: describeError(e) });
@@ -140,36 +149,34 @@ export function GameSummaryScreen() {
     );
   }
 
-  const { analysis, puzzleCount } = phase;
-  const mine = analysis[game.userColor];
-  const theirs = analysis[game.userColor === 'white' ? 'black' : 'white'];
-  const rows: Array<[string, number, number]> = [];
-  if (mine.brilliant || theirs.brilliant) rows.push(['Блестящие', mine.brilliant, theirs.brilliant]);
-  if (mine.great || theirs.great) rows.push(['Сильные', mine.great, theirs.great]);
-  rows.push(
-    ['Лучшие', mine.grades.best, theirs.grades.best],
-    ['Хорошие', mine.grades.good, theirs.grades.good],
-    ['Неточности', mine.grades.inaccuracy, theirs.grades.inaccuracy],
-    ['Ошибки', mine.grades.mistake, theirs.grades.mistake],
-    ['Грубые ошибки', mine.grades.blunder, theirs.grades.blunder],
-  );
+  const { analysis, report, puzzleCount } = phase;
+  const ownerIsWhite = game.userColor === 'white';
+  const names = ownerIsWhite ? ['Ты', game.opponent] : [game.opponent, 'Ты'];
+  const ownerSide = report[game.userColor];
   const advice = topKinds(game, analysis);
-  const hasMistakes = mine.grades.mistake + mine.grades.blunder > 0;
+  const hasMistakes = ownerSide.counts.mistake + ownerSide.counts.miss + ownerSide.counts.blunder > 0;
 
   return (
     <section className="summary">
       {header}
-      <table className="summary-table">
-        <thead>
-          <tr><th scope="col" /><th scope="col">Ты</th><th scope="col">{game.opponent}</th></tr>
-        </thead>
-        <tbody>
-          {rows.map(([title, a, b]) => (
-            <tr key={title}><th scope="row">{title}</th><td>{a}</td><td>{b}</td></tr>
-          ))}
-          <tr><th scope="row">Точность</th><td>{Math.round(mine.accuracy)}%</td><td>{Math.round(theirs.accuracy)}%</td></tr>
-        </tbody>
-      </table>
+      <div className="summary-names">
+        {names.map((n, i) => <span key={i} className="summary-name">{n}</span>)}
+      </div>
+      <div className="summary-accuracy-row">
+        <span className="summary-row-title">Точность</span>
+        <span className="summary-accuracy summary-accuracy--white">{formatAccuracy(report.white.accuracy)}</span>
+        <span className="summary-accuracy summary-accuracy--black">{formatAccuracy(report.black.accuracy)}</span>
+      </div>
+      <ul className="summary-rows">
+        {CATEGORY_ORDER.map((c) => (
+          <li key={c} className="summary-row" style={{ '--row-color': `var(--cat-${c})` } as CSSProperties}>
+            <span className="summary-row-title">{CATEGORY_TITLE[c]}</span>
+            <span className="summary-row-num">{report.white.counts[c]}</span>
+            <CategoryIcon category={c} size={30} />
+            <span className="summary-row-num">{report.black.counts[c]}</span>
+          </li>
+        ))}
+      </ul>
       {advice.length > 0 && (
         <div className="summary-advice">
           <h2>Совет</h2>
