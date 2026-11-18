@@ -126,8 +126,9 @@ describe('GameSummaryScreen', () => {
     expect(rowOf('Хорошо')).toEqual(['Хорошо', '1', '0']);
     expect(rowOf('Зевок')).toEqual(['Зевок', '0', '1']);
     expect(rowOf('Блестящий ход')).toEqual(['Блестящий ход', '0', '0']);
-    expect(screen.getAllByRole('img').map((i) => i.getAttribute('aria-label')))
-      .toEqual(CATEGORY_ORDER.map((c) => CATEGORY_TITLE[c]));
+    // Значки в строках — украшение: название слева уже есть.
+    expect(screen.queryAllByRole('img')).toHaveLength(0);
+    expect(document.querySelectorAll('.summary-row svg[aria-hidden="true"]')).toHaveLength(10);
   });
 
   it('владелец чёрными: «Ты» над правым столбцом, его числа справа', async () => {
@@ -140,6 +141,10 @@ describe('GameSummaryScreen', () => {
     expect(names).toEqual(['rival_one', 'Ты']);
     expect(rowOf('Зевок')).toEqual(['Зевок', '0', '1']);
     expect(rowOf('Лучший')).toEqual(['Лучший', '1', '0']);
+    // Плашка белых — слева, чёрных — справа, независимо от того, кто владелец.
+    const [left, right] = [...document.querySelectorAll('.summary-accuracy')];
+    expect(left.classList.contains('summary-accuracy--white')).toBe(true);
+    expect(right.classList.contains('summary-accuracy--black')).toBe(true);
   });
 
   it('владелец белыми: «Ты» над левым столбцом', async () => {
@@ -348,12 +353,36 @@ describe('GameSummaryScreen', () => {
     expect(await screen.findByText('Разбираю партию…')).toBeTruthy();
   });
 
-  it('open вернул разбор: показывается сводка', async () => {
+  it('open вернул разбор: показывается сводка с точностью из оценок', async () => {
     await putGames([game('g1')]);
-    store.open.mockResolvedValueOnce(analysis('g1', side({ accuracy: 90 }), side()));
+    // Плоская партия из двух ходов без потерь: точность обеих сторон 100.
+    store.open.mockResolvedValueOnce(withScores(analysis('g1', side({ accuracy: 90 }), side(),
+      [mv(0, 0, 'best'), mv(1, 0, 'best')])));
     renderSummary();
     expect(await screen.findByText('Точность')).toBeTruthy();
     expect(titles()).toHaveLength(10);
+    expect([...document.querySelectorAll('.summary-accuracy')].map((n) => n.textContent)).toEqual(['100.0', '100.0']);
+  });
+
+  it('оценок меньше, чем ходов в партии: свой текст про разбор и «К партиям»', async () => {
+    await putGames([game('g1', { moves: ['e2e4', 'e7e5'] })]);
+    await saveAnalysis(analysis('g1', side(), side()), { put: [], removeIds: [] });
+    renderSummary();
+    expect(await screen.findByText('Не удалось показать разбор этой партии')).toBeTruthy();
+    expect(screen.queryByText('Не удалось открыть партию')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'К партиям' }));
+    expect(screen.getByTestId('where').textContent).toBe('/games');
+  });
+
+  it('подсчёт отчёта бросает (битая оценка): тот же текст, без текста исключения', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await putGames([game('g1', { moves: ['e2e4'] })]);
+    const a = analysis('g1', side(), side(), [mv(0, 0, 'best')]);
+    await saveAnalysis({ ...a, scores: [{ cp: 0 }, null as never] }, { put: [], removeIds: [] });
+    renderSummary();
+    expect(await screen.findByText('Не удалось показать разбор этой партии')).toBeTruthy();
+    expect(screen.queryByText(/Cannot read/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'К партиям' })).toBeTruthy();
   });
 
   it('неизвестная партия: «Партия не найдена» и «К партиям»', async () => {

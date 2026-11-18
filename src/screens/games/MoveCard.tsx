@@ -40,9 +40,9 @@ export function MoveCard({ view, beforeFen, alts, chosen, onChoose }: MoveCardPr
   return (
     <div className="move-card" data-testid="move-card">
       <p className="move-card-head">
-        <span className="move-card-grade" style={{ background: `var(--cat-${category})` }}>
-          <CategoryIcon category={category} size={18} />
-          {CATEGORY_TITLE[category]}
+        <span className="move-card-grade">
+          <CategoryIcon category={category} size={18} decorative />
+          <span className="move-card-grade-name" style={{ color: `var(--cat-${category})` }}>{CATEGORY_TITLE[category]}</span>
         </span>
         <b className="move-card-move">{view.label}</b>
       </p>

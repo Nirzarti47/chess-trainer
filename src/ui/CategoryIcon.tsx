@@ -64,10 +64,13 @@ function glyph(category: Category): ReactNode {
   }
 }
 
-/** Значок вида хода: кружок цвета вида (var(--cat-<вид>)) с белым знаком внутри. size — в пикселях. */
-export function CategoryIcon({ category, size = 30 }: { category: Category; size?: number }) {
+/** Значок вида хода: кружок цвета вида (var(--cat-<вид>)) с белым знаком внутри. size — в пикселях; decorative — без подписи для чтеца экрана. */
+export function CategoryIcon({ category, size = 30, decorative = false }:
+  { category: Category; size?: number; decorative?: boolean }) {
+  // decorative — рядом виден текст названия: значок для чтеца экрана лишний.
+  const a11y = decorative ? { 'aria-hidden': true as const } : { role: 'img', 'aria-label': CATEGORY_TITLE[category] };
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} role="img" aria-label={CATEGORY_TITLE[category]}>
+    <svg viewBox="0 0 24 24" width={size} height={size} {...a11y}>
       <circle cx="12" cy="12" r="12" fill={`var(--cat-${category})`} />
       {glyph(category)}
     </svg>

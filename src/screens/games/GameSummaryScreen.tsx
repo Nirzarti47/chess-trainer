@@ -17,6 +17,8 @@ type Phase =
   | { kind: 'loading' }
   | { kind: 'notFound' }
   | { kind: 'dbError'; text: string }
+  /** Разбор испорчен: оценок меньше, чем ходов, или отчёт по ним не считается. */
+  | { kind: 'broken' }
   | { kind: 'running'; game: GameRecord }
   /** text — сбой разбора, запомненный в момент ответа open. */
   | { kind: 'failed'; game: GameRecord; text: string }
@@ -82,8 +84,21 @@ export function GameSummaryScreen() {
       }
       const puzzleCount = (await getGamePuzzles(gameId)).length;
       // Книга дебютов грузится один раз за сеанс; при сбое она пустая — теоретических ходов тогда нет.
-      const report = reportOf(analysis, await loadBookPlies(game.moves));
-      if (alive) setPhase({ kind: 'ready', game, analysis, report, puzzleCount });
+      const bookPlies = await loadBookPlies(game.moves);
+      let report: GameReport | null = null;
+      if (analysis.scores.length >= game.moves.length + 1) {
+        try {
+          report = reportOf(analysis, bookPlies);
+        } catch (e) {
+          console.error('Не удалось посчитать отчёт о партии', e);
+        }
+      }
+      if (!alive) return;
+      if (!report) {
+        setPhase({ kind: 'broken' });
+        return;
+      }
+      setPhase({ kind: 'ready', game, analysis, report, puzzleCount });
     })().catch((e: unknown) => {
       console.error('Не удалось открыть партию', e);
       if (alive) setPhase({ kind: 'dbError', text: describeError(e) });
@@ -108,6 +123,15 @@ export function GameSummaryScreen() {
         <h1>Не удалось открыть партию</h1>
         <p className="summary-note">{phase.text}</p>
         <BigButton variant="surface" onClick={() => setAttempt((n) => n + 1)}>Повторить</BigButton>
+        <BigButton variant="surface" onClick={() => navigate('/games')}>К партиям</BigButton>
+      </section>
+    );
+  }
+
+  if (phase.kind === 'broken') {
+    return (
+      <section className="summary">
+        <h1>Не удалось показать разбор этой партии</h1>
         <BigButton variant="surface" onClick={() => navigate('/games')}>К партиям</BigButton>
       </section>
     );
@@ -171,7 +195,7 @@ export function GameSummaryScreen() {
           <li key={c} className="summary-row" style={{ '--row-color': `var(--cat-${c})` } as CSSProperties}>
             <span className="summary-row-title">{CATEGORY_TITLE[c]}</span>
             <span className="summary-row-num">{report.white.counts[c]}</span>
-            <CategoryIcon category={c} size={30} />
+            <CategoryIcon category={c} size={30} decorative />
             <span className="summary-row-num">{report.black.counts[c]}</span>
           </li>
         ))}

@@ -2,7 +2,9 @@ import 'fake-indexeddb/auto';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Chess } from 'chess.js';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import openingsRaw from '../../../public/openings.json?raw';
 import { CONFIG } from '../../analysis/config';
+import { resetOpeningBookCache } from '../../analysis/openings';
 import { formatScore } from '../../analysis/score';
 import { tableEngine } from '../../analysis/testEngine';
 import { db } from '../../data/db';
@@ -345,8 +347,10 @@ describe('ReviewScreen: виды ходов', () => {
     renderReview('/games/g1/review?ply=2');
     const c = await screen.findByTestId('move-card');
     const tag = within(c).getByText('Упущенная возможность');
-    expect(tag.style.background).toBe('var(--cat-miss)');
-    expect(within(c).getByRole('img', { name: 'Упущенная возможность' })).toBeTruthy();
+    expect(tag.style.color).toBe('var(--cat-miss)');
+    // Значок в плашке — украшение: название рядом уже написано.
+    expect(within(c).queryByRole('img')).toBeNull();
+    expect(c.querySelector('svg')!.getAttribute('aria-hidden')).toBe('true');
     expect(board.props!.badge).toEqual({ square: 'h5', category: 'miss' });
     expect(board.props!.lastMoveTone).toBe('bad');
   });
@@ -380,6 +384,24 @@ describe('ReviewScreen: виды ходов', () => {
     await saveAnalysis(analysis({ scores, moves: missed.moves }), { put: [], removeIds: [] });
     renderReview();
     expect(await screen.findByText('Не удалось показать разбор этой партии')).toBeTruthy();
+  });
+});
+
+describe('ReviewScreen: теория', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetOpeningBookCache();
+  });
+
+  it('первые ходы из книги — «Теоретический ход» в карточке первого хода', async () => {
+    resetOpeningBookCache();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => JSON.parse(openingsRaw) }));
+    await putGames([game()]);
+    await saveAnalysis(analysis(), { put: [], removeIds: [] });
+    renderReview('/games/g1/review?ply=0');
+    await screen.findByText('1. e4');
+    expect(within(card()).getByText('Теоретический ход')).toBeTruthy();
+    expect(board.props!.badge).toEqual({ square: 'e4', category: 'book' });
   });
 });
 

@@ -38,6 +38,6 @@ export function gameAccuracy(scores: Score[], side: Side): number | null {
   if (accs.length === 0) return null;
   const weighted = accs.reduce((s, a, k) => s + a * weights[k], 0) / weights.reduce((s, x) => s + x, 0);
   // в гармоническом среднем ход не меньше 1: иначе один ноль обнуляет всё
-  const harmonic = accs.length / accs.reduce((s, a) => s + 1 / Math.max(a, 1), 0);
+  const harmonic = accs.length / accs.reduce((s, a) => s + 1 / Math.max(a, CONFIG.ACC_HARMONIC_FLOOR), 0);
   return (weighted + harmonic) / 2;
 }

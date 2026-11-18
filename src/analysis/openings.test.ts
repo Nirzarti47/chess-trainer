@@ -6,6 +6,7 @@ import {
   bookLength,
   hashKey,
   loadOpeningBook,
+  loadBookPlies,
   parseOpeningsFile,
   positionKey,
   resetOpeningBookCache,
@@ -64,6 +65,10 @@ describe('bookLength', () => {
     expect(bookLength(ITALIAN.split(' '), book)).toBe(1);
   });
 
+  it('недопустимый ход — ноль', () => {
+    expect(bookLength(['e2e5'], italian)).toBe(0);
+  });
+
   it('пустая книга — ноль', () => {
     expect(bookLength(ITALIAN.split(' '), bookFromKeys([]))).toBe(0);
   });
@@ -91,6 +96,11 @@ describe('loadOpeningBook', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('нет сети')));
     const book = await loadOpeningBook();
     expect(book.has(positionKey(new Chess().fen()))).toBe(false);
+  });
+
+  it('loadBookPlies при сбое fetch — ноль', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('нет сети')));
+    expect(await loadBookPlies(['e2e4', 'e7e5'])).toBe(0);
   });
 
   it('грузит файл один раз', async () => {
