@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GameAnalysis, MoveReview, Score, SideSummary } from '../domain/gameTypes';
 import { gameAccuracy, moveAccuracyWin } from './accuracy';
+import { CONFIG } from './config';
 import { reportOf } from './report';
 import { expected } from './score';
 
@@ -48,8 +49,18 @@ describe('gameAccuracy', () => {
     // Окно 2 (20 полуходов), вес ply 4: sd окна {52.76, 13.69} = 19.54 → предел 12; у остальных sd = 0 → 0.5.
     // Взвешенное: (16.659·12 + 9·100·0.5) / (12 + 4.5) = 39.389.
     // Гармоническое: 10 / (1/16.659 + 9/100) = 66.655. Итог: (39.389 + 66.655) / 2 = 53.022.
+    // расчёт выше — для способа Lichess как есть (поправка 1); подогнанная поправка из CONFIG только смягчает потерю
     const scores: Score[] = Array.from({ length: 21 }, (_, i) => ({ cp: i <= 4 ? 30 : -500 }));
-    expect(gameAccuracy(scores, 'white')!).toBeCloseTo(53.02, 1);
+    const tuned = gameAccuracy(scores, 'white')!;
+    const cfg = CONFIG as { ACC_LOSS_SCALE: number };
+    const saved = cfg.ACC_LOSS_SCALE;
+    cfg.ACC_LOSS_SCALE = 1;
+    try {
+      expect(gameAccuracy(scores, 'white')!).toBeCloseTo(53.02, 1);
+    } finally {
+      cfg.ACC_LOSS_SCALE = saved;
+    }
+    if (saved < 1) expect(tuned).toBeGreaterThan(53.02);
   });
   it('мат и конец партии в оценках не дают NaN', () => {
     const scores: Score[] = [{ cp: 0 }, { mate: 3 }, { mate: -2 }, { over: 'white' }, { over: 'draw' }, { over: 'black' }];
