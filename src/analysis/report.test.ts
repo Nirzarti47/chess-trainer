@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameAnalysis, Grade, Mark, MoveReview, Score, SideSummary } from '../domain/gameTypes';
+import { CONFIG } from './config';
 import { CATEGORY_TITLE } from './phrases';
 import { CATEGORY_ORDER, categorize, reportOf, type Category } from './report';
 
@@ -36,7 +37,7 @@ describe('categorize: правила по одному', () => {
   it('неточность', () => expect(one({ loss: 0.07 })).toBe('inaccuracy'));
   it('ошибка', () => expect(one({ loss: 0.15 })).toBe('mistake'));
   it('зевок', () => expect(one({ loss: 0.3 })).toBe('blunder'));
-  it('знак важнее теории только после книги', () => expect(one({ mark: 'brilliant' }, 1)).toBe('book'));
+  it('теория важнее знака', () => expect(one({ mark: 'brilliant' }, 1)).toBe('book'));
 });
 
 describe('categorize: упущенная возможность', () => {
@@ -55,6 +56,20 @@ describe('categorize: упущенная возможность', () => {
   });
   it('соперник сыграл лишь неточность — не miss', () => {
     expect(categorize(build(0.07, 0.12, { cp: 0 }), 0)[1]).toBe('mistake');
+  });
+  it('ошибка 0.19, опустившая ниже, чем до подарка, — mistake, не miss', () => {
+    expect(categorize(build(0.3, 0.19, { cp: 300 }), 0)[1]).toBe('mistake');
+  });
+  it('граница доли подарка: loss ровно MISS_SHARE × подарок — miss', () => {
+    expect(categorize(build(0.3, 0.3 * CONFIG.MISS_SHARE, { cp: 0 }), 0)[1]).toBe('miss');
+  });
+  it('граница допуска: на 0.05 ниже прежнего — miss, чуть ниже — нет', () => {
+    // чёрные до подарка стояли на 0.5; допуск 0.05 → 0.45 у чёрных ≈ +54,5 cp у белых
+    expect(categorize(build(0.3, 0.2, { cp: 54 }), 0)[1]).toBe('miss');
+    expect(categorize(build(0.3, 0.2, { cp: 55 }), 0)[1]).toBe('blunder');
+  });
+  it('теоретический ход соперника не подарок — blunder, не miss', () => {
+    expect(categorize(build(0.3, 0.2, { cp: 0 }), 1)).toEqual(['book', 'blunder']);
   });
   it('первый ход партии не бывает miss', () => {
     expect(categorize(analysis([{ loss: 0.12 }]), 0)[0]).toBe('mistake');

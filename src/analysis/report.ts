@@ -11,9 +11,10 @@ export const CATEGORY_ORDER: readonly Category[] =
 
 const moverOf = (ply: number): Side => (ply % 2 === 0 ? 'white' : 'black');
 
-/** Ход i вернул не меньше половины подаренного и не опустил сторону ниже, чем до ошибки соперника. */
-function isMiss(a: GameAnalysis, i: number): boolean {
-  if (i < 1) return false;
+/** Ход i вернул не меньше половины подаренного и не опустил сторону ниже, чем до ошибки соперника.
+ *  Теоретический ход соперника подарком не считается. */
+function isMiss(a: GameAnalysis, i: number, bookPlies: number): boolean {
+  if (i < 1 || i - 1 < bookPlies) return false;
   const m = a.moves[i];
   const prev = a.moves[i - 1];
   if (prev.loss < CONFIG.INACCURACY_MAX || m.loss < CONFIG.INACCURACY_MAX) return false;
@@ -32,7 +33,7 @@ export function categorize(a: GameAnalysis, bookPlies: number): Category[] {
     if (m.loss < CONFIG.EXCELLENT_MAX) return 'excellent';
     if (m.loss < CONFIG.GOOD_MAX) return 'good';
     if (m.loss < CONFIG.INACCURACY_MAX) return 'inaccuracy';
-    if (isMiss(a, i)) return 'miss';
+    if (isMiss(a, i, bookPlies)) return 'miss';
     if (m.loss < CONFIG.MISTAKE_MAX) return 'mistake';
     return 'blunder';
   });
