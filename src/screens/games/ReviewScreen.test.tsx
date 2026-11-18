@@ -562,6 +562,22 @@ describe('ReviewScreen: нет данных', () => {
     expect(screen.getByTestId('where').textContent).toBe('/games/g1');
   });
 
+  it('лишние оценки — тот же текст, что и в сводке', async () => {
+    await putGames([game()]);
+    await saveAnalysis(analysis({ scores: [...SCORES, { cp: 0 }] }), { put: [], removeIds: [] });
+    renderReview();
+    expect(await screen.findByText('Не удалось показать разбор этой партии')).toBeTruthy();
+  });
+
+  it('у разбора нет оценок — тот же текст, а не «TypeError»', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await putGames([game()]);
+    await saveAnalysis(analysis({ scores: undefined as never }), { put: [], removeIds: [] });
+    renderReview();
+    expect(await screen.findByText('Не удалось показать разбор этой партии')).toBeTruthy();
+    expect(screen.queryByText(/TypeError/)).toBeNull();
+  });
+
   it('сбой чтения базы — свой текст', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(db.games, 'get').mockRejectedValueOnce(new Error('Unable to open'));

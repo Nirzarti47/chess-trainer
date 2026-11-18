@@ -11,6 +11,7 @@ import { CategoryIcon } from '../../ui/CategoryIcon';
 import { ProgressBar } from '../../ui/ProgressBar';
 import { describeError } from '../lessonErrors';
 import { formatDate, RESULT } from './GamesScreen';
+import { isAnalysisUsable } from './reviewModel';
 import './GameSummaryScreen.css';
 
 type Phase =
@@ -86,12 +87,10 @@ export function GameSummaryScreen() {
       // Книга дебютов грузится один раз за сеанс; при сбое она пустая — теоретических ходов тогда нет.
       const bookPlies = await loadBookPlies(game.moves);
       let report: GameReport | null = null;
-      if (analysis.scores.length >= game.moves.length + 1) {
-        try {
-          report = reportOf(analysis, bookPlies);
-        } catch (e) {
-          console.error('Не удалось посчитать отчёт о партии', e);
-        }
+      try {
+        if (isAnalysisUsable(game, analysis)) report = reportOf(analysis, bookPlies);
+      } catch (e) {
+        console.error('Не удалось посчитать отчёт о партии', e);
       }
       if (!alive) return;
       if (!report) {
@@ -194,9 +193,9 @@ export function GameSummaryScreen() {
         {CATEGORY_ORDER.map((c) => (
           <li key={c} className="summary-row" style={{ '--row-color': `var(--cat-${c})` } as CSSProperties}>
             <span className="summary-row-title">{CATEGORY_TITLE[c]}</span>
-            <span className="summary-row-num">{report.white.counts[c]}</span>
+            <span className="summary-row-num" aria-label={`${names[0]}: ${report.white.counts[c]}`}>{report.white.counts[c]}</span>
             <CategoryIcon category={c} size={30} decorative />
-            <span className="summary-row-num">{report.black.counts[c]}</span>
+            <span className="summary-row-num" aria-label={`${names[1]}: ${report.black.counts[c]}`}>{report.black.counts[c]}</span>
           </li>
         ))}
       </ul>

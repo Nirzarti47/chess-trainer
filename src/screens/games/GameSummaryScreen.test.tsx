@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import openingsRaw from '../../../public/openings.json?raw';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { CONFIG } from '../../analysis/config';
 import { resetOpeningBookCache } from '../../analysis/openings';
@@ -89,6 +89,8 @@ const titles = () => [...document.querySelectorAll('.summary-row .summary-row-ti
 /** Ход с заданной потерей: 0 — «Лучший», 0.03 — «Хорошо», 0.3 — «Зевок» (не «Упущенная»: соперник до этого не ошибался). */
 const mv = (ply: number, loss: number, grade: Grade): MoveReview =>
   ({ ply, move: 'e2e4', loss, grade, best: [], deep: false });
+/** n ходов-заглушек: сводка их не играет, нужно только число (оценок на одну больше). */
+const movesN = (n: number): string[] => Array.from({ length: n }, () => 'e2e4');
 const flat = (n: number) => Array.from({ length: n + 1 }, () => ({ cp: 0 }));
 const withScores = (a: GameAnalysis): GameAnalysis => ({ ...a, scores: flat(a.moves.length) });
 
@@ -110,7 +112,7 @@ afterEach(() => {
 
 describe('GameSummaryScreen', () => {
   it('десять строк в порядке CATEGORY_ORDER, в том числе с нулями; числа по столбцам — из reportOf', async () => {
-    await putGames([game('g1')]);
+    await putGames([game('g1', { moves: movesN(5) })]);
     const a = withScores(analysis('g1', side(), side(), [
       mv(0, 0, 'best'), mv(1, 0, 'best'), mv(2, 0.03, 'good'), mv(3, 0.3, 'blunder'), mv(4, 0, 'best'),
     ]));
@@ -132,7 +134,7 @@ describe('GameSummaryScreen', () => {
   });
 
   it('владелец чёрными: «Ты» над правым столбцом, его числа справа', async () => {
-    await putGames([game('g1', { userColor: 'black' })]);
+    await putGames([game('g1', { userColor: 'black', moves: movesN(2) })]);
     await saveAnalysis(withScores(analysis('g1', side(), side(), [mv(0, 0, 'best'), mv(1, 0.3, 'blunder')])),
       { put: [], removeIds: [] });
     renderSummary();
@@ -208,7 +210,7 @@ describe('GameSummaryScreen', () => {
   });
 
   it('совет называет самый частый вид владельца; «other» и ходы соперника не считаются', async () => {
-    await putGames([game('g1')]);
+    await putGames([game('g1', { moves: movesN(7) })]);
     // ply чётный — ход белых (владелец), нечётный — чёрных.
     const moves = [review(0, 'badTrade'), review(2, 'missedFork'), review(4, 'missedFork'), review(1, 'other'),
       review(3, 'missedMate'), review(5, 'missedMate'), review(6, 'other')];
@@ -220,7 +222,7 @@ describe('GameSummaryScreen', () => {
   });
 
   it('при равенстве счёта порядок — как виды впервые встретились; больше двух не показывается', async () => {
-    await putGames([game('g1')]);
+    await putGames([game('g1', { moves: movesN(3) })]);
     const moves = [review(0, 'missedCapture'), review(2, 'badTrade'), review(4, 'missedFork')];
     await saveAnalysis(withScores(analysis('g1', side(), side(), moves)), { put: [], removeIds: [] });
     renderSummary();
@@ -260,13 +262,14 @@ describe('GameSummaryScreen', () => {
   });
 
   it('Л6: ошибки есть, а задач нет — вместо кнопки пояснение; без ошибок пояснения нет', async () => {
-    await putGames([game('g1')]);
+    await putGames([game('g1', { moves: movesN(1) })]);
     await saveAnalysis(withScores(analysis('g1', side(), side(), [mv(0, 0.3, 'blunder')])), { put: [], removeIds: [] });
     const first = renderSummary();
     expect(await screen.findByText(
       'Задач из этой партии нет: ни в одной ошибке не нашлось одного ясно лучшего хода')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Исправить ошибки/ })).toBeNull();
     first.unmount();
+    await db.games.put(game('g1', { moves: movesN(2) }));
     await saveAnalysis(withScores(analysis('g1', side(), side(), [mv(0, 0, 'best'), mv(1, 0.3, 'blunder')])),
       { put: [], removeIds: [] });
     renderSummary();
@@ -354,7 +357,7 @@ describe('GameSummaryScreen', () => {
   });
 
   it('open вернул разбор: показывается сводка с точностью из оценок', async () => {
-    await putGames([game('g1')]);
+    await putGames([game('g1', { moves: movesN(2) })]);
     // Плоская партия из двух ходов без потерь: точность обеих сторон 100.
     store.open.mockResolvedValueOnce(withScores(analysis('g1', side({ accuracy: 90 }), side(),
       [mv(0, 0, 'best'), mv(1, 0, 'best')])));
@@ -383,6 +386,37 @@ describe('GameSummaryScreen', () => {
     expect(await screen.findByText('Не удалось показать разбор этой партии')).toBeTruthy();
     expect(screen.queryByText(/Cannot read/)).toBeNull();
     expect(screen.getByRole('button', { name: 'К партиям' })).toBeTruthy();
+  });
+
+  it('лишние оценки: тот же текст про разбор, отчёта нет', async () => {
+    await putGames([game('g1', { moves: ['e2e4'] })]);
+    const a = analysis('g1', side(), side(), [mv(0, 0, 'best')]);
+    await saveAnalysis({ ...a, scores: flat(3) }, { put: [], removeIds: [] });
+    renderSummary();
+    expect(await screen.findByText('Не удалось показать разбор этой партии')).toBeTruthy();
+    expect(screen.queryByText('Точность')).toBeNull();
+  });
+
+  it('у разбора нет оценок: тот же текст, а не «TypeError»', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await putGames([game('g1', { moves: ['e2e4'] })]);
+    const a = analysis('g1', side(), side(), [mv(0, 0, 'best')]);
+    await saveAnalysis({ ...a, scores: undefined as never }, { put: [], removeIds: [] });
+    renderSummary();
+    expect(await screen.findByText('Не удалось показать разбор этой партии')).toBeTruthy();
+    expect(screen.queryByText(/TypeError/)).toBeNull();
+    expect(screen.queryByText('Не удалось открыть партию')).toBeNull();
+  });
+
+  it('числа строки сводки читаются с именем столбца', async () => {
+    await putGames([game('g1', { moves: movesN(3) })]);
+    const a = withScores(analysis('g1', side(), side(), [mv(0, 0, 'best'), mv(1, 0, 'best'), mv(2, 0, 'best')]));
+    await saveAnalysis(a, { put: [], removeIds: [] });
+    renderSummary();
+    await screen.findByText('Точность');
+    const row = screen.getByText('Лучший').closest('.summary-row') as HTMLElement;
+    expect(within(row).getByLabelText('Ты: 2').textContent).toBe('2');
+    expect(within(row).getByLabelText('rival_one: 1').textContent).toBe('1');
   });
 
   it('неизвестная партия: «Партия не найдена» и «К партиям»', async () => {

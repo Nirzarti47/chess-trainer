@@ -61,6 +61,9 @@ export function resetOpeningBookCache(): void {
   cached = null;
 }
 
+/** Сколько ждать загрузку книги: дольше — пустая книга, экран не должен висеть пустым. */
+export const OPENING_BOOK_TIMEOUT_MS = 3000;
+
 async function fetchBook(): Promise<OpeningBook | null> {
   try {
     const response = await fetch(`${import.meta.env.BASE_URL}openings.json`);
@@ -71,10 +74,21 @@ async function fetchBook(): Promise<OpeningBook | null> {
   }
 }
 
+/** Загрузка книги не дольше тайм-аута; по тайм-ауту — null (как сбой). */
+function fetchBookWithTimeout(): Promise<OpeningBook | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), OPENING_BOOK_TIMEOUT_MS);
+    void fetchBook().then((book) => {
+      clearTimeout(timer);
+      resolve(book);
+    });
+  });
+}
+
 /** Книга из файла public/openings.json; удачная загрузка запоминается, сбой — нет (следующий вызов пробует снова); при сбое — пустая книга, без исключения. */
 export function loadOpeningBook(): Promise<OpeningBook> {
   if (cached) return cached;
-  const attempt: Promise<OpeningBook> = fetchBook().then((book) => {
+  const attempt: Promise<OpeningBook> = fetchBookWithTimeout().then((book) => {
     if (book) return book;
     if (cached === attempt) cached = null;
     return EMPTY_BOOK;

@@ -16,6 +16,10 @@ export interface PlyView {
   category: Category | null;
 }
 
+/** Разбор пригоден для показа: оценки есть и их ровно на одну больше, чем ходов в партии. */
+export const isAnalysisUsable = (game: GameRecord, analysis: GameAnalysis): boolean =>
+  Array.isArray(analysis.scores) && analysis.scores.length === game.moves.length + 1;
+
 /** Кто делает ход номер ply (0 — первый ход белых). */
 export const moverOf = (ply: number): Side => (ply % 2 === 0 ? 'white' : 'black');
 

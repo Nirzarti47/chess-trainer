@@ -16,6 +16,7 @@ import { RESULT } from './GamesScreen';
 import { MoveCard, ruMove } from './MoveCard';
 import {
   alternatives, BAD_CATEGORIES, bestArrowVisible, buildPlyViews, chartPoints, moverOf, nextUserMistake, type PlyView,
+  isAnalysisUsable,
 } from './reviewModel';
 import { useExplore, type ExploreState } from './useExplore';
 import './ReviewScreen.css';
@@ -145,8 +146,8 @@ interface Prepared { views: PlyView[]; categories: Category[] }
 /** Позиции партии и виды ходов; null — данные испорчены (недопустимый ход, число оценок не сходится с числом ходов,
  *  оценки не читаются). */
 function prepare(game: GameRecord, analysis: GameAnalysis, bookPlies: number): Prepared | null {
-  if (analysis.scores.length !== game.moves.length + 1) return null;
   try {
+    if (!isAnalysisUsable(game, analysis)) return null;
     const categories = categorize(analysis, bookPlies);
     return { views: buildPlyViews(game, analysis, categories), categories };
   } catch (e) {

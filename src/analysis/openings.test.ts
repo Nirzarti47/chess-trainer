@@ -6,6 +6,7 @@ import {
   bookLength,
   hashKey,
   loadOpeningBook,
+  OPENING_BOOK_TIMEOUT_MS,
   loadBookPlies,
   parseOpeningsFile,
   positionKey,
@@ -124,5 +125,29 @@ describe('loadOpeningBook', () => {
     const book = await loadOpeningBook();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(bookLength(['e2e4', 'e7e5'], book)).toBe(2);
+  });
+
+  it('висящий fetch: по тайм-ауту пустая книга, сбой не запоминается', async () => {
+    vi.useFakeTimers();
+    try {
+      const file = JSON.parse(openingsRaw);
+      const fetchMock = vi.fn().mockReturnValueOnce(new Promise(() => {}))
+        .mockResolvedValue({ ok: true, json: async () => file });
+      vi.stubGlobal('fetch', fetchMock);
+      const pending = loadOpeningBook();
+      await vi.advanceTimersByTimeAsync(OPENING_BOOK_TIMEOUT_MS - 1);
+      let done = false;
+      void pending.then(() => { done = true; });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      const empty = await pending;
+      expect(empty.has(positionKey(new Chess().fen()))).toBe(false);
+      const book = await loadOpeningBook();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(bookLength(['e2e4', 'e7e5'], book)).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
